@@ -112,9 +112,13 @@ export class VirtualOLED {
 
     // Sensors count / ESP32 state
     ctx.font = '7px monospace';
-    ctx.fillStyle = this.state.liftedSquare ? YELLOW : '#86e1e8';
-    if (this.state.liftedSquare) {
-      ctx.fillText(`LIFT: ${this.state.liftedSquare.toUpperCase()} (IN HAND)`, 2, 27);
+    const liftedText = Array.isArray(this.state.liftedSquare)
+      ? this.state.liftedSquare.join(', ').toUpperCase()
+      : (typeof this.state.liftedSquare === 'string' ? this.state.liftedSquare.toUpperCase() : '');
+
+    ctx.fillStyle = liftedText ? YELLOW : '#86e1e8';
+    if (liftedText) {
+      ctx.fillText(`LIFT: ${liftedText} (IN HAND)`, 2, 27);
     } else {
       ctx.fillText(`SENSORS: ${this.state.occupiedCount}/64 OCC`, 2, 27);
     }

@@ -203,7 +203,7 @@ export class VirtualESP32 {
         message: response.oled_message || response.status.toUpperCase(),
         occupiedCount: this.sensorMatrix.getOccupiedCount(),
         scanState: 'IDLE',
-        liftedSquare: response.lifted || null,
+        liftedSquare: Array.isArray(response.lifted) ? response.lifted.join(', ') : (response.lifted || null),
         isError: response.status === 'rejected'
       });
 
