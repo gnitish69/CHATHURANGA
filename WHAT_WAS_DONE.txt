@@ -140,7 +140,7 @@ Results:
 
 Summary: 11 tests executed, 11 passed, 0 failed.
 
-5. VERIFIED ACCEPTANCE CRITERIA
+5. VERIFIED ACCEPTANCE CRITERIA (PHASE 1)
 --------------------------------------------------------------------------------
 [x] 1. Initial board renders correctly with standard starting setup.
 [x] 2. Dragging a piece updates simulated sensor states.
@@ -151,18 +151,104 @@ Summary: 11 tests executed, 11 passed, 0 failed.
 [x] 7. Application runs locally without depending on an internet connection.
 [x] 8. Basic automated tests cover sensor bitmap mapping and key simulator behavior.
 
-6. HOW TO RUN
---------------------------------------------------------------------------------
-1. To start local web server:
-   npm start
-   (or: python -m http.server 3000)
-2. Open in browser:
-   http://localhost:3000
-3. To run automated tests:
-   npm test
-
-7. NEXT STEPS (PHASE 2 ROADMAP)
---------------------------------------------------------------------------------
-Refer to DOCS/WORKFLOW_AND_PROMPTS.md for the complete prompt to implement Phase 2:
-Python Flask backend with python-chess and REST API integration.
 ================================================================================
+CHĀTURANGA — Phase 2: Python Flask Backend & python-chess Integration
+Implementation Summary & Deliverables Audit
+================================================================================
+
+8. PHASE 2 ARCHITECTURE & DIRECTORY STRUCTURE
+--------------------------------------------------------------------------------
+D:/CHATHURANGA/backend/
+├── __init__.py                  # Backend root package
+├── app.py                       # Flask factory, CORS configuration & blueprints
+├── run.py                       # Server entry point (runs on port 5000)
+├── services/
+│   ├── __init__.py
+│   ├── chess_engine.py          # python-chess authoritative rule validation & move resolver
+│   └── led_service.py           # 64-square LED state manager
+├── routes/
+│   ├── __init__.py
+│   ├── hardware.py              # /api/v1/hardware/scan, /leds, /health
+│   └── game.py                  # /api/v1/game/state, /move, /reset
+└── tests/
+    ├── __init__.py
+    ├── test_chess_engine.py     # Move resolution, castling, en passant, promotion, checkmate
+    ├── test_hardware_api.py     # Integration tests for /api/v1/hardware endpoints
+    └── test_game_api.py         # Integration tests for /api/v1/game endpoints
+
+9. IMPLEMENTED REST API ENDPOINTS
+--------------------------------------------------------------------------------
+1. POST /api/v1/hardware/scan
+   - Resolves debounced physical sensor lift and placement diffs.
+   - Identifies candidate piece, computes legal destinations via python-chess.
+   - Emits intermediate lift feedback (source YELLOW, destinations CYAN).
+   - Validates and applies completed moves, castling (King + Rook), en passant,
+     and pawn promotions.
+   - Detects check/checkmate and lights offending King square RED.
+   - Rejects illegal moves with 400 Bad Request and RED error LED directives.
+
+2. GET /api/v1/game/state
+   - Returns authoritative game state, turn, FEN string, and chronological history.
+
+3. POST /api/v1/game/move
+   - Directly executes moves via standard UCI notation (e.g. "e2e4").
+
+4. POST /api/v1/game/reset
+   - Resets the board to standard starting position (rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR).
+
+5. POST /api/v1/hardware/leds
+   - Manually sets or clears board LEDs.
+
+6. GET /api/v1/hardware/health
+   - Returns health status, uptime, backend version, and python-chess version.
+
+10. AUTOMATED PYTEST TEST RESULTS (PHASE 2)
+--------------------------------------------------------------------------------
+Command: python -m pytest backend/tests -v
+Results:
+- backend/tests/test_chess_engine.py:
+  * test_initial_state                   [PASSED]
+  * test_legal_moves_progression         [PASSED]
+  * test_illegal_moves_rejected          [PASSED]
+  * test_lift_intermediate_scan          [PASSED]
+  * test_move_cancellation               [PASSED]
+  * test_castling_resolution             [PASSED]
+  * test_en_passant_resolution           [PASSED]
+  * test_pawn_promotion                  [PASSED]
+  * test_check_and_checkmate             [PASSED]
+- backend/tests/test_game_api.py:
+  * test_get_game_state                  [PASSED]
+  * test_execute_move_direct             [PASSED]
+  * test_execute_invalid_move_direct     [PASSED]
+  * test_game_reset                      [PASSED]
+- backend/tests/test_hardware_api.py:
+  * test_health_endpoint                 [PASSED]
+  * test_scan_lift_intermediate          [PASSED]
+  * test_scan_move_accepted              [PASSED]
+  * test_scan_illegal_move_rejected      [PASSED]
+  * test_command_leds                    [PASSED]
+
+Summary: 18 passed in 1.09s (Total suite: 29 passed across Phase 1 & Phase 2).
+
+11. HOW TO RUN THE FULL SYSTEM (FRONTEND + BACKEND)
+--------------------------------------------------------------------------------
+Terminal 1 (Backend):
+   python backend/run.py
+   -> Runs Flask API server on http://localhost:5000 (and http://127.0.0.1:5000)
+
+Terminal 2 (Frontend):
+   npm start
+   -> Runs Simulator UI on http://localhost:3000
+
+In the Browser (http://localhost:3000):
+   Under "Control Center & Inspector" -> "Backend Mode", switch dropdown
+   from "Mock Backend" to "Live Flask Backend (HTTP REST)".
+   Physical moves dragged on the simulator are now resolved in real-time
+   by the live Python Flask backend!
+
+12. NEXT STEPS (PHASE 3 ROADMAP)
+--------------------------------------------------------------------------------
+Refer to DOCS/WORKFLOW_AND_PROMPTS.md for Phase 3:
+SQLite Database & PGN Game Persistence.
+================================================================================
+

@@ -57,7 +57,7 @@ export const HARDWARE_CONFIG = {
   RETRY_BACKOFF_MS: 500,
 
   // Backend connection
-  DEFAULT_BACKEND_URL: 'http://localhost:5000',
+  DEFAULT_BACKEND_URL: 'http://127.0.0.1:5000',
   MOCK_MODE_DEFAULT: true,
 
   // Standard starting FEN
