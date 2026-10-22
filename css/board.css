@@ -260,6 +260,46 @@
   border: 2px solid rgba(255, 210, 31, 0.75);
 }
 
+/* MAGENTA (Remove captured piece) */
+.led-magenta .led-corner {
+  background: #e056fd;
+  box-shadow: 0 0 8px #e056fd, 0 0 14px rgba(224, 86, 253, 0.9);
+}
+.led-magenta .led-underglow {
+  background: radial-gradient(circle, rgba(224, 86, 253, 0.5) 0%, rgba(224, 86, 253, 0.08) 70%, transparent 100%);
+  border: 2px solid rgba(224, 86, 253, 0.85);
+}
+
+/* BLUE (Put piece back / restore missing) */
+.led-blue .led-corner {
+  background: #3867d6;
+  box-shadow: 0 0 8px #3867d6, 0 0 14px rgba(56, 103, 214, 0.9);
+}
+.led-blue .led-underglow {
+  background: radial-gradient(circle, rgba(56, 103, 214, 0.5) 0%, rgba(56, 103, 214, 0.08) 70%, transparent 100%);
+  border: 2px solid rgba(56, 103, 214, 0.85);
+}
+
+/* ORANGE (King in check) */
+.led-orange .led-corner {
+  background: #fa8231;
+  box-shadow: 0 0 8px #fa8231, 0 0 14px rgba(250, 130, 49, 0.9);
+}
+.led-orange .led-underglow {
+  background: radial-gradient(circle, rgba(250, 130, 49, 0.5) 0%, rgba(250, 130, 49, 0.08) 70%, transparent 100%);
+  border: 2px solid rgba(250, 130, 49, 0.85);
+}
+
+/* WHITE (Setup missing squares) */
+.led-white .led-corner {
+  background: #ffffff;
+  box-shadow: 0 0 8px #ffffff, 0 0 14px rgba(255, 255, 255, 0.95);
+}
+.led-white .led-underglow {
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.45) 0%, rgba(255, 255, 255, 0.08) 70%, transparent 100%);
+  border: 2px solid rgba(255, 255, 255, 0.85);
+}
+
 /* Modes */
 .led-pulse {
   animation: ledPulse 1.4s infinite ease-in-out;
@@ -277,4 +317,69 @@
 @keyframes ledFlash {
   0% { opacity: 0.15; }
   100% { opacity: 1; }
+}
+
+/* =========================================================
+   Captured Pieces Trays (Phase 3 Realistic Physical Play)
+   ========================================================= */
+.captured-trays-wrapper {
+  width: 100%;
+  max-width: 540px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.captured-tray {
+  background: rgba(15, 20, 32, 0.7);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  transition: all 0.2s ease;
+}
+
+.captured-tray.drag-over {
+  background: rgba(56, 225, 255, 0.15);
+  border-color: var(--accent-cyan);
+}
+
+.captured-tray-label {
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+.captured-pieces-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  flex: 1;
+  min-height: 28px;
+}
+
+.captured-piece-item {
+  width: 28px;
+  height: 28px;
+  cursor: grab;
+  user-select: none;
+  transition: transform 0.15s ease;
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+}
+
+.captured-piece-item:hover {
+  transform: scale(1.15);
+}
+
+.captured-piece-item.dragging {
+  opacity: 0.4;
 }

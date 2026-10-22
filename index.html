@@ -31,6 +31,10 @@
     </div>
 
     <div class="header-status-group">
+      <div class="status-pill pill-engine-online" id="stockfish-engine-badge" title="Stockfish 18 Engine Status: Click for details">
+        <span class="engine-pulse-dot"></span>
+        <span id="stockfish-badge-text">STOCKFISH 18 ONLINE</span>
+      </div>
       <div class="status-pill pill-idle" id="esp-state-badge">BOOT</div>
       <div class="status-pill pill-wifi-connected" id="esp-wifi-badge">WIFI OK</div>
     </div>
@@ -57,6 +61,18 @@
       <div class="chessboard-wrapper">
         <div class="board-bezel-frame">
           <div id="board-grid" class="chessboard-grid show-sensor-overlay"></div>
+        </div>
+      </div>
+
+      <!-- Off-Board Captured Pieces Trays -->
+      <div class="captured-trays-wrapper">
+        <div class="captured-tray" id="tray-white-captured" title="White Captured Pieces (Drag back to board to recover)">
+          <span class="captured-tray-label">White Captured:</span>
+          <div class="captured-pieces-list"></div>
+        </div>
+        <div class="captured-tray" id="tray-black-captured" title="Black Captured Pieces (Drag back to board to recover)">
+          <span class="captured-tray-label">Black Captured:</span>
+          <div class="captured-pieces-list"></div>
         </div>
       </div>
 
@@ -150,14 +166,105 @@
     <section class="card-panel column-inspector" aria-labelledby="heading-inspector">
       <div class="panel-header">
         <h2 class="panel-title" id="heading-inspector">
-          <span>Control Center &amp; Inspector</span>
+          <span>Game Mode &amp; Telemetry</span>
         </h2>
-        <div class="panel-subtitle">REST API &amp; Telemetry</div>
+        <div class="panel-subtitle">Authoritative Rules &amp; Engine</div>
+      </div>
+
+      <!-- Phase 3 Mode Switcher -->
+      <div class="mode-segmented-bar">
+        <button class="mode-tab-btn active" id="btn-mode-computer" data-mode="vs_engine">
+          <span>♟ VS COMPUTER</span>
+        </button>
+        <button class="mode-tab-btn" id="btn-mode-twoplayer" data-mode="two_player">
+          <span>👥 TWO PLAYER</span>
+        </button>
+      </div>
+
+      <!-- Authoritative Game Phase Banner -->
+      <div class="phase-status-banner" id="phase-status-banner">
+        <div>
+          <div class="phase-banner-title" id="phase-banner-title">WHITE TO MOVE</div>
+          <div class="phase-banner-sub" id="phase-banner-sub">Physical board ready. Lift piece to start.</div>
+        </div>
+        <div id="check-badge" style="display:none; color: #fa8231; font-weight:800; font-size:0.8rem; background: rgba(250,130,49,0.15); border: 1px solid #fa8231; padding: 2px 8px; border-radius: 4px;">CHECK!</div>
+      </div>
+
+      <!-- Engine Move Guidance Card (VS COMPUTER Mode) -->
+      <div class="guidance-box" id="guidance-box" style="display: none;">
+        <div class="guidance-step-header">
+          <span class="guidance-step-tag" id="guidance-step-tag">STEP 1 OF 2</span>
+          <span style="font-size:0.75rem; color:#2ecc71; font-weight:700;">ENGINE GUIDANCE</span>
+        </div>
+        <div class="guidance-instruction" id="guidance-instruction">Move piece from e7 to e5</div>
+        <div class="guidance-led-hints" id="guidance-led-hints">
+          <span class="led-hint-pill"><span class="led-hint-dot" style="background:#ffd21f;"></span> Lift (Yellow)</span>
+          <span class="led-hint-pill"><span class="led-hint-dot" style="background:#2ecc71;"></span> Place (Green)</span>
+          <span class="led-hint-pill" id="hint-magenta" style="display:none;"><span class="led-hint-dot" style="background:#e056fd;"></span> Capture (Magenta)</span>
+        </div>
+      </div>
+
+      <!-- Illegal Move / Mismatch Recovery Card -->
+      <div class="recovery-box" id="recovery-box" style="display: none;">
+        <div class="recovery-header">
+          <span>⚠ RECOVERY REQUIRED</span>
+        </div>
+        <div style="font-size: 0.8rem; color: #e6edf3;" id="recovery-reason">Physical board does not match expected position.</div>
+        <div class="recovery-diff-list" id="recovery-diff-list"></div>
+      </div>
+
+      <!-- Match Settings (VS Computer / Two Player) -->
+      <div style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
+        <div id="vs-computer-settings">
+          <div class="setting-row">
+            <span class="setting-label">Human Color:</span>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn" id="btn-color-white" style="padding: 3px 10px; font-size: 0.75rem; background: var(--accent-cyan); color: #000; font-weight: 700;">White ♔</button>
+              <button class="btn" id="btn-color-black" style="padding: 3px 10px; font-size: 0.75rem; background: #1c2638; color: var(--text-main);">Black ♚</button>
+            </div>
+          </div>
+
+          <div class="setting-row" style="margin-top: 8px;">
+            <span class="setting-label">Stockfish Strength:</span>
+            <span class="setting-val" id="val-skill-level">Level 5 (Casual)</span>
+          </div>
+          <input type="range" id="slider-skill-level" class="range-slider" min="0" max="20" step="1" value="5">
+        </div>
+
+        <div style="display: flex; gap: 8px; margin-top: 10px;">
+          <button id="btn-new-game" class="btn btn-primary" style="flex: 1;" title="Start a fresh game session">
+            <span class="icon">♟</span> New Game
+          </button>
+          <button id="btn-resign" class="btn btn-danger" style="padding: 6px 12px;" title="Resign current game">
+            Resign
+          </button>
+          <button id="btn-claim-draw" class="btn" style="padding: 6px 12px;" title="Claim draw by repetition or 50 moves" disabled>
+            Claim Draw
+          </button>
+        </div>
+      </div>
+
+      <!-- Live Move History & Direct PGN Download Card (Always Visible) -->
+      <div class="live-move-history-card">
+        <div class="live-move-header">
+          <span class="live-move-title">Move Notation (Live)</span>
+          <div style="display:flex; gap:6px;">
+            <button id="btn-download-pgn" class="btn btn-primary" style="padding: 3px 9px; font-size: 0.72rem;" title="Download complete .PGN game record directly">
+              📥 Download .PGN
+            </button>
+            <button id="btn-export-pgn" class="btn" style="padding: 3px 8px; font-size: 0.72rem;" title="Copy PGN text to clipboard">
+              Copy
+            </button>
+          </div>
+        </div>
+        <div class="live-moves-scroll" id="live-moves-list">
+          <div class="no-moves-placeholder">No moves recorded yet. Play a move on the board!</div>
+        </div>
       </div>
 
       <!-- Simulation Action Buttons -->
       <div class="controls-grid">
-        <button id="btn-toggle-scan" class="btn btn-primary" title="Pause/Resume firmware scan loop">
+        <button id="btn-toggle-scan" class="btn" title="Pause/Resume firmware scan loop">
           <span class="icon">⏸</span> Pause Scan
         </button>
         <button id="btn-reset-system" class="btn" title="Reset pieces, sensors and ESP32">
@@ -166,7 +273,7 @@
         <button id="btn-clear-logs" class="btn" title="Clear all logs">
           <span class="icon">🗑</span> Clear Logs
         </button>
-        <button id="btn-sim-rejected" class="btn btn-danger" title="Trigger an illegal move to verify error rejection flow">
+        <button id="btn-sim-rejected" class="btn btn-danger" title="Trigger an illegal move to verify recovery flow">
           <span class="icon">⚠</span> Test Move Rejection
         </button>
       </div>
@@ -250,6 +357,32 @@
     <div>CHĀTURANGA Phase 1: Hardware Simulator &bull; Autonomous Architecture</div>
     <div>Bitboard convention: a1=bit 0, h8=bit 63 &bull; Polarity: 1=Occupied, 0=Empty</div>
   </footer>
+
+  <!-- Pawn Promotion Modal (Standing in for hardware Q/R/B/N buttons) -->
+  <div class="promotion-modal-backdrop" id="promotion-modal">
+    <div class="promotion-modal-card">
+      <h3>Pawn Promotion</h3>
+      <p>Select piece to promote your pawn onto rank 8:</p>
+      <div class="promotion-pieces-grid">
+        <button class="btn-promo-piece" data-piece="q">
+          <span class="promo-piece-icon">♛</span>
+          <span class="promo-piece-label">Queen (Q)</span>
+        </button>
+        <button class="btn-promo-piece" data-piece="r">
+          <span class="promo-piece-icon">♜</span>
+          <span class="promo-piece-label">Rook (R)</span>
+        </button>
+        <button class="btn-promo-piece" data-piece="b">
+          <span class="promo-piece-icon">♝</span>
+          <span class="promo-piece-label">Bishop (B)</span>
+        </button>
+        <button class="btn-promo-piece" data-piece="n">
+          <span class="promo-piece-icon">♞</span>
+          <span class="promo-piece-label">Knight (N)</span>
+        </button>
+      </div>
+    </div>
+  </div>
 
   <!-- App Bootstrap -->
   <script type="module" src="js/app.js"></script>

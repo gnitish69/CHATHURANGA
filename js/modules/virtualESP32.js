@@ -60,7 +60,8 @@ export class VirtualESP32 {
       sensorEvent: [],
       stateChange: [],
       hwLedChange: [],
-      moveConfirmed: []
+      moveConfirmed: [],
+      scanResponse: []
     };
   }
 
@@ -211,7 +212,7 @@ export class VirtualESP32 {
       if (response.leds) {
         this.virtualLEDs.setLEDCommand({
           squares: response.leds,
-          clearOthers: response.status === 'accepted'
+          clearOthers: (response.status === 'accepted' || response.status === 'recovery')
         });
       }
 
@@ -223,6 +224,9 @@ export class VirtualESP32 {
           this.virtualLEDs.flashIllegal(Object.keys(response.leds));
         }
       }
+
+      // Notify application of full authoritative scan response (guidance, recovery, etc.)
+      this._notifyScanResponse(response);
 
       this._notifyStateChange();
     } catch (err) {
@@ -296,6 +300,7 @@ export class VirtualESP32 {
   onStateChange(cb) { this.listeners.stateChange.push(cb); }
   onHwLedChange(cb) { this.listeners.hwLedChange.push(cb); }
   onMoveConfirmed(cb) { this.listeners.moveConfirmed.push(cb); }
+  onScanResponse(cb) { this.listeners.scanResponse.push(cb); }
 
   _notifySensorEvent(evt) { for (const cb of this.listeners.sensorEvent) cb(evt); }
   _notifyStateChange() {
@@ -311,4 +316,5 @@ export class VirtualESP32 {
   }
   _notifyHwLedChange() { for (const cb of this.listeners.hwLedChange) cb(this.hwLeds); }
   _notifyMoveConfirmed(moveData) { for (const cb of this.listeners.moveConfirmed) cb(moveData); }
+  _notifyScanResponse(resp) { for (const cb of this.listeners.scanResponse) cb(resp); }
 }

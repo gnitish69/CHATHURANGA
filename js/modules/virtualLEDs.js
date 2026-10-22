@@ -12,7 +12,9 @@ export const LED_COLORS = {
   BLUE: 'led-blue',
   CYAN: 'led-cyan',
   YELLOW: 'led-yellow',
-  WHITE: 'led-white'
+  WHITE: 'led-white',
+  MAGENTA: 'led-magenta',
+  ORANGE: 'led-orange'
 };
 
 export const LED_MODES = {

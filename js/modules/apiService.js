@@ -127,7 +127,7 @@ export class ApiService {
         response: data
       });
 
-      if (!response.ok) {
+      if (!response.ok && !data.status) {
         throw new Error(data.error || `HTTP error ${response.status}`);
       }
       return data;
@@ -266,6 +266,134 @@ export class ApiService {
         error: err.message
       });
       throw err;
+    }
+  }
+
+  /**
+   * Check Stockfish Engine Status
+   */
+  async getEngineStatus() {
+    if (this.mode === 'MOCK') {
+      return { status: 'mock', engine_name: 'Internal Rule Engine (Mock)', is_fake: true };
+    }
+    try {
+      const res = await fetch(`${this.baseUrl}/api/v1/hardware/engine_status`);
+      if (!res.ok) return { status: 'offline' };
+      return await res.json();
+    } catch (e) {
+      return { status: 'offline', error: e.message };
+    }
+  }
+
+  /**
+   * Start New Game with Phase 3 configuration (mode, color, skill, move_time)
+   */
+  async startNewGame(options = {}) {
+    const endpoint = '/api/v1/game/new';
+    const method = 'POST';
+    const startTime = performance.now();
+
+    const requestInfo = {
+      timestamp: new Date().toISOString(),
+      method,
+      endpoint: `${this.baseUrl}${endpoint}`,
+      mode: this.mode,
+      headers: { 'Content-Type': 'application/json' },
+      body: options
+    };
+
+    if (this.mode === 'MOCK') {
+      await this._sleep(this.latencyMs);
+      this.mockBackend.reset();
+      const data = {
+        ...this.mockBackend.getGameState(),
+        mode: options.mode || 'two_player',
+        phase: 'WAITING_MOVE'
+      };
+      this._notifyTraffic({
+        ...requestInfo,
+        status: 200,
+        statusText: 'OK',
+        durationMs: Math.round(performance.now() - startTime),
+        response: data
+      });
+      return data;
+    }
+
+    try {
+      const res = await fetch(`${this.baseUrl}${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(options)
+      });
+      const data = await res.json();
+      this._notifyTraffic({
+        ...requestInfo,
+        status: res.status,
+        statusText: res.statusText,
+        durationMs: Math.round(performance.now() - startTime),
+        response: data
+      });
+      return data;
+    } catch (err) {
+      this._notifyTraffic({
+        ...requestInfo,
+        status: 0,
+        statusText: 'FETCH_ERROR',
+        durationMs: Math.round(performance.now() - startTime),
+        error: err.message
+      });
+      throw err;
+    }
+  }
+
+  /**
+   * Choose Promotion Piece (Q, R, B, N)
+   */
+  async choosePromotion(piece) {
+    const endpoint = '/api/v1/game/promotion';
+    const res = await fetch(`${this.baseUrl}${endpoint}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ piece })
+    });
+    return await res.json();
+  }
+
+  /**
+   * Resign active game
+   */
+  async resignGame() {
+    const endpoint = '/api/v1/game/resign';
+    const res = await fetch(`${this.baseUrl}${endpoint}`, { method: 'POST' });
+    return await res.json();
+  }
+
+  /**
+   * Claim Draw (threefold repetition / 50-move rule)
+   */
+  async claimDraw() {
+    const endpoint = '/api/v1/game/claim_draw';
+    const res = await fetch(`${this.baseUrl}${endpoint}`, { method: 'POST' });
+    return await res.json();
+  }
+
+  /**
+   * Get official PGN export
+   */
+  async getPGN() {
+    const endpoint = '/api/v1/game/pgn';
+    try {
+      const res = await fetch(`${this.baseUrl}${endpoint}`);
+      const text = await res.text();
+      try {
+        const json = JSON.parse(text);
+        return { pgn: json.pgn || text };
+      } catch (e) {
+        return { pgn: text };
+      }
+    } catch (e) {
+      return { pgn: '' };
     }
   }
 

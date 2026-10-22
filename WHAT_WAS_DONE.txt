@@ -246,9 +246,51 @@ In the Browser (http://localhost:3000):
    Physical moves dragged on the simulator are now resolved in real-time
    by the live Python Flask backend!
 
-12. NEXT STEPS (PHASE 3 ROADMAP)
+12. PHASE 3 COMPLETED: FULL GAME, COMPUTER MODE (STOCKFISH 18), TWO-PLAYER MODE & RECOVERY
 --------------------------------------------------------------------------------
-Refer to DOCS/WORKFLOW_AND_PROMPTS.md for Phase 3:
-SQLite Database & PGN Game Persistence.
-================================================================================
+1. Stockfish 18 Engine Integration:
+   - Located Stockfish 18 AVX2 binary at D:\ChessAI\CHESSAI\stockfish-windows-x86-64-avx2.exe
+   - Copied binary to D:\CHATHURANGA\engines\stockfish\stockfish-windows-x86-64-avx2.exe
+   - Configured $env:STOCKFISH_PATH and backend/config.py
+   - Built backend/services/engine_service.py with asynchronous thread worker,
+     UCI communication via python-chess SimpleEngine, and FakeEngine test double.
+   - Tested live real binary via pytest: test_real_stockfish_integration PASSED!
 
+2. 8-State Authoritative Game Machine:
+   - SETUP_VERIFY, WAITING_MOVE, MOVE_IN_PROGRESS, AWAITING_PROMOTION_CHOICE,
+     ENGINE_THINKING, GUIDING_ENGINE_MOVE, RECOVERY, GAME_OVER.
+   - Step-by-step physical LED guidance for computer moves (YELLOW lift, GREEN place, MAGENTA remove capture).
+   - Recovery system on illegal moves: BLUE LED (put piece back), RED LED (remove piece).
+
+3. Phase 3 Test Coverage:
+   - Total backend tests: 31 PASSED (100% pass rate in backend/tests).
+   - Total frontend tests: 11 PASSED (100% pass rate in tests/).
+
+4. Frontend UI Upgrades:
+   - Live Glowing Engine Status Badge in header: "STOCKFISH 18 ONLINE".
+   - Mode Switcher: "VS COMPUTER" vs "TWO PLAYER".
+   - Settings: Human Color (White/Black), Stockfish Strength Slider (Level 0 to 20), Move Time.
+   - Live Guidance Card: step-by-step physical guidance with LED color indicators.
+   - Recovery Diff Card: lists missing pieces (BLUE) and extra pieces (RED) with live update.
+   - Captured Pieces Trays: drag pieces off board into White/Black trays and back onto board.
+   - Pawn Promotion Dialog: Queen, Rook, Bishop, Knight buttons.
+   - Game Action Buttons: New Game, Resign, Claim Draw, Export PGN.
+================================================================================
+5. Automated Stockfish Guidance, Seamless Cancellation & Direct PGN Download:
+   - Automatic Async Guidance Polling: Fixed issue where simulator waited indefinitely
+     on "STOCKFISH THINKING..." without showing LEDs until the user touched a piece.
+     The frontend now actively polls /api/v1/game/state every 200ms while thinking,
+     automatically illuminating LEDs (YELLOW source, GREEN destination) and popping
+     up the Guidance Card in ~300ms without requiring any physical touch.
+   - Piece Cancellation & Switch Piece: Users can click or drop a piece back on its
+     original square or another friendly piece to cancel or change selection cleanly
+     without triggering move rejection or false recovery.
+   - Guidance Intermediate In-Hand Tolerances: Lifting the guided piece no longer triggers
+     false recovery. Putting the guided piece back down is cleanly handled.
+   - Live Move Notation Card: Live 2-column notation (1. e4 e5, 2. Nf3 ...) with active
+     move highlighted and auto-scrolling on every move.
+   - 1-Click Direct .PGN File Download: Added direct [📥 Download .PGN] button that creates
+     and downloads the official chaturanga_game_<timestamp>.pgn file directly to disk.
+   - Real Stockfish 18 Verification: 100% official Stockfish 18 AVX2 64-bit engine verified
+     via UCI interface at D:\CHATHURANGA\engines\stockfish\stockfish-windows-x86-64-avx2.exe.
+================================================================================

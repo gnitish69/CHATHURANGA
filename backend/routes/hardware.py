@@ -1,9 +1,10 @@
 """
-CHĀTURANGA Phase 2 — Hardware Routes
+CHĀTURANGA Phase 3 — Hardware Routes
 Endpoints:
   POST /api/v1/hardware/scan
   POST /api/v1/hardware/leds
   GET  /api/v1/hardware/health
+  GET  /api/v1/hardware/engine_status
 """
 
 import time
@@ -23,22 +24,25 @@ def hardware_scan():
       "timestamp": 1729601400000,
       "bitmap_hex": "0xFFFF00000000FFFF",
       "diff": { "lifted": ["e2"], "placed": ["e4"] },
-      "debounced": true
+      "debounced": true,
+      "seq": 10
     }
     """
     payload = request.get_json(silent=True) or {}
-    chess_service = current_app.chess_service
+    game_session = current_app.game_session
     led_service = current_app.led_service
 
-    result = chess_service.process_scan(payload)
+    result = game_session.process_scan(payload)
 
     # Sync LED service if leds were generated
     if "leds" in result and isinstance(result["leds"], dict):
-        clear_others = (result.get("status") == "accepted")
+        clear_others = (result.get("status") in ("accepted", "recovery"))
         led_service.set_leds(result["leds"], clear_others=clear_others)
 
-    # Status code: accepted / intermediate / idle / warning -> 200, rejected -> 400
-    status_code = 400 if result.get("status") == "rejected" else 200
+    # Status codes:
+    # accepted / intermediate / idle / warning / game_over -> 200
+    # rejected / recovery -> 400
+    status_code = 400 if result.get("status") in ("rejected", "recovery") else 200
     return jsonify(result), status_code
 
 
@@ -64,13 +68,25 @@ def set_leds():
     }), 200
 
 
+@hardware_bp.route("/engine_status", methods=["GET"])
+def engine_status():
+    """Check Stockfish engine process status."""
+    engine_service = current_app.engine_service
+    status = engine_service.get_status() if engine_service else {"status": "offline"}
+    return jsonify(status), 200
+
+
 @hardware_bp.route("/health", methods=["GET"])
 def health():
-    """Returns backend and hardware layer health info."""
+    """Returns backend, engine, and hardware layer health info."""
     uptime = int(time.time() - _START_TIME)
+    engine_service = current_app.engine_service
+    eng_status = engine_service.get_status() if engine_service else {"status": "offline"}
+
     return jsonify({
         "status": "healthy",
         "uptime_seconds": uptime,
-        "backend_version": "1.0.0-phase2",
-        "python_chess_version": getattr(chess, "__version__", "1.11.2")
+        "backend_version": "1.0.0-phase3",
+        "python_chess_version": getattr(chess, "__version__", "1.11.2"),
+        "engine": eng_status
     }), 200

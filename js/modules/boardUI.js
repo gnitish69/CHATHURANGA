@@ -30,6 +30,13 @@ export class BoardUI {
     this.onPieceLiftCallback = null;
     this.onPieceDropCallback = null;
     this.onSquareClickCallback = null;
+
+    // Captured pieces
+    this.capturedWhite = [];
+    this.capturedBlack = [];
+    this.whiteTrayEl = null;
+    this.blackTrayEl = null;
+    this.draggedTrayPiece = null;
   }
 
   init() {
@@ -203,9 +210,27 @@ export class BoardUI {
       e.preventDefault();
       squareEl.classList.remove('drag-over');
       const fromSq = e.dataTransfer.getData('text/plain') || this.draggedSquare;
-      if (fromSq) {
-        this._handleDropPiece(fromSq, sq);
+      if (!fromSq) return;
+
+      const fromPiece = this.pieces[fromSq];
+      const targetPiece = this.pieces[sq];
+
+      // If dropped on another friendly piece of the SAME color, abort and restore origin piece!
+      if (fromPiece && targetPiece && fromSq !== sq) {
+        const isFromWhite = fromPiece === fromPiece.toUpperCase();
+        const isTargetWhite = targetPiece === targetPiece.toUpperCase();
+        if (isFromWhite === isTargetWhite) {
+          this.sensorMatrix.setPhysicalPresence(fromSq, true);
+          this.updateSensorIndicators();
+          this.virtualLEDs.clearAll();
+          this.renderPieces();
+          this.draggedSquare = null;
+          this.draggedPiece = null;
+          return;
+        }
       }
+
+      this._handleDropPiece(fromSq, sq);
     });
   }
 
@@ -242,6 +267,8 @@ export class BoardUI {
       if (this.draggedSquare && this.pieces[this.draggedSquare]) {
         this.sensorMatrix.setPhysicalPresence(this.draggedSquare, true);
         this.updateSensorIndicators();
+        this.virtualLEDs.clearAll();
+        this.renderPieces();
       }
       this.draggedSquare = null;
       this.draggedPiece = null;
@@ -264,42 +291,83 @@ export class BoardUI {
       return;
     }
 
-    // A piece was already selected
     const fromSq = this.selectedSquare;
-    this.selectedSquare = null;
-    this._clearSelected();
 
+    // Case A: Clicked on same square -> Cancel lift and put piece back!
     if (fromSq === sq) {
-      // Put back on same square
+      this.selectedSquare = null;
+      this._clearSelected();
       this.sensorMatrix.setPhysicalPresence(sq, true);
       this.updateSensorIndicators();
+      this.virtualLEDs.clearAll();
       return;
     }
 
-    // Placed on destination square
+    // Case B: Clicked on another piece of the same color!
+    // The player changed their mind and wants to pick up a different piece!
+    const fromPiece = this.pieces[fromSq];
+    const targetPiece = this.pieces[sq];
+    if (fromPiece && targetPiece) {
+      const isFromWhite = fromPiece === fromPiece.toUpperCase();
+      const isTargetWhite = targetPiece === targetPiece.toUpperCase();
+      if (isFromWhite === isTargetWhite) {
+        // Put previous piece back!
+        this.sensorMatrix.setPhysicalPresence(fromSq, true);
+        // Select and lift the new piece!
+        this.selectedSquare = sq;
+        this._highlightSelected(sq);
+        this.sensorMatrix.setPhysicalPresence(sq, false);
+        this.updateSensorIndicators();
+        this.virtualLEDs.clearAll();
+        if (this.onPieceLiftCallback) {
+          this.onPieceLiftCallback(sq, targetPiece);
+        }
+        return;
+      }
+    }
+
+    // Case C: Placed on destination square (move or capture)
+    this.selectedSquare = null;
+    this._clearSelected();
     this._handleDropPiece(fromSq, sq);
   }
 
   _handleDropPiece(fromSq, toSq) {
-    const piece = this.pieces[fromSq];
-    if (!piece) return;
+    let piece = null;
 
-    if (fromSq === toSq) {
-      // Placed back on same square
-      this.sensorMatrix.setPhysicalPresence(fromSq, true);
-      this.updateSensorIndicators();
-      return;
+    if (this.draggedTrayPiece) {
+      // Piece placed from captured pieces tray onto board
+      piece = this.draggedTrayPiece;
+      const isWhite = piece === piece.toUpperCase();
+      const trayList = isWhite ? this.capturedWhite : this.capturedBlack;
+      const idx = trayList.indexOf(piece);
+      if (idx !== -1) trayList.splice(idx, 1);
+      this.draggedTrayPiece = null;
+      this.renderCapturedTrays();
+    } else {
+      piece = this.pieces[fromSq];
+      if (!piece) return;
+
+      if (fromSq === toSq) {
+        // Placed back on same square
+        this.sensorMatrix.setPhysicalPresence(fromSq, true);
+        this.updateSensorIndicators();
+        this.virtualLEDs.clearAll();
+        this.renderPieces();
+        return;
+      }
+
+      delete this.pieces[fromSq];
+      this.sensorMatrix.setPhysicalPresence(fromSq, false);
     }
 
-    // Capture or normal move:
-    // Update board UI pieces
-    delete this.pieces[fromSq];
-    this.pieces[toSq] = piece;
+    // If destination square had an enemy piece, send captured piece to tray
+    const existingTargetPiece = this.pieces[toSq];
+    if (existingTargetPiece) {
+      this.addCapturedPiece(existingTargetPiece);
+    }
 
-    // Physical reed switch changes:
-    // fromSq is now definitely empty (0)
-    this.sensorMatrix.setPhysicalPresence(fromSq, false);
-    // toSq is now occupied (1)
+    this.pieces[toSq] = piece;
     this.sensorMatrix.setPhysicalPresence(toSq, true);
 
     this.renderPieces();
@@ -307,6 +375,91 @@ export class BoardUI {
 
     if (this.onPieceDropCallback) {
       this.onPieceDropCallback(fromSq, toSq, piece);
+    }
+  }
+
+  bindCapturedTrays(whiteTrayEl, blackTrayEl) {
+    this.whiteTrayEl = whiteTrayEl;
+    this.blackTrayEl = blackTrayEl;
+    this._initTrayDropListeners(this.whiteTrayEl, 'w');
+    this._initTrayDropListeners(this.blackTrayEl, 'b');
+    this.renderCapturedTrays();
+  }
+
+  _initTrayDropListeners(trayEl, color) {
+    if (!trayEl) return;
+    trayEl.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      trayEl.classList.add('drag-over');
+    });
+
+    trayEl.addEventListener('dragleave', () => {
+      trayEl.classList.remove('drag-over');
+    });
+
+    trayEl.addEventListener('drop', (e) => {
+      e.preventDefault();
+      trayEl.classList.remove('drag-over');
+      const fromSq = e.dataTransfer.getData('text/plain') || this.draggedSquare;
+      if (fromSq && this.pieces[fromSq]) {
+        const piece = this.pieces[fromSq];
+        delete this.pieces[fromSq];
+        this.sensorMatrix.setPhysicalPresence(fromSq, false);
+        this.addCapturedPiece(piece);
+        this.renderPieces();
+        this.updateSensorIndicators();
+        this.draggedSquare = null;
+        this.draggedPiece = null;
+      }
+    });
+  }
+
+  addCapturedPiece(piece) {
+    const isWhite = piece === piece.toUpperCase();
+    if (isWhite) {
+      this.capturedWhite.push(piece);
+    } else {
+      this.capturedBlack.push(piece);
+    }
+    this.renderCapturedTrays();
+  }
+
+  renderCapturedTrays() {
+    if (this.whiteTrayEl) {
+      const listEl = this.whiteTrayEl.querySelector('.captured-pieces-list') || this.whiteTrayEl;
+      listEl.innerHTML = '';
+      this.capturedWhite.forEach((p, idx) => {
+        const item = document.createElement('div');
+        item.className = 'captured-piece-item';
+        item.draggable = true;
+        item.innerHTML = PIECE_SVGS[p] || p;
+        item.title = `White ${p} (drag onto board to restore)`;
+        item.addEventListener('dragstart', (e) => {
+          this.draggedTrayPiece = p;
+          e.dataTransfer.setData('text/plain', `tray_w_${idx}`);
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        listEl.appendChild(item);
+      });
+    }
+
+    if (this.blackTrayEl) {
+      const listEl = this.blackTrayEl.querySelector('.captured-pieces-list') || this.blackTrayEl;
+      listEl.innerHTML = '';
+      this.capturedBlack.forEach((p, idx) => {
+        const item = document.createElement('div');
+        item.className = 'captured-piece-item';
+        item.draggable = true;
+        item.innerHTML = PIECE_SVGS[p] || p;
+        item.title = `Black ${p} (drag onto board to restore)`;
+        item.addEventListener('dragstart', (e) => {
+          this.draggedTrayPiece = p;
+          e.dataTransfer.setData('text/plain', `tray_b_${idx}`);
+          e.dataTransfer.effectAllowed = 'move';
+        });
+        listEl.appendChild(item);
+      });
     }
   }
 
