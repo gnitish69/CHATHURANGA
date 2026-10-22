@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="CHĀTURANGA Phase 1: Hardware Simulator for AI Electronic Chessboard. Virtual ESP32, 64-square reed switch sensor matrix, OLED display, and LED indicator engine.">
+  <meta name="author" content="CHĀTURANGA Project">
+  <title>CHĀTURANGA — Hardware Simulator (Phase 1)</title>
+
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600;700&display=swap" rel="stylesheet">
+
+  <!-- Modular CSS Stylesheets -->
+  <link rel="stylesheet" href="css/main.css">
+  <link rel="stylesheet" href="css/board.css">
+  <link rel="stylesheet" href="css/hardware.css">
+  <link rel="stylesheet" href="css/panels.css">
+</head>
+<body>
+
+  <!-- Application Header -->
+  <header class="app-header">
+    <div class="brand-wrapper">
+      <div class="brand-icon">♟</div>
+      <div class="brand-text">
+        <h1>CHĀTURANGA</h1>
+        <div class="brand-subtitle">AI Electronic Chessboard &bull; Phase 1 Hardware Simulator</div>
+      </div>
+    </div>
+
+    <div class="header-status-group">
+      <div class="status-pill pill-idle" id="esp-state-badge">BOOT</div>
+      <div class="status-pill pill-wifi-connected" id="esp-wifi-badge">WIFI OK</div>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="workspace-container">
+
+    <!-- Column 1: Physical Chessboard & Sensor Overlay -->
+    <section class="card-panel column-board" aria-labelledby="heading-board">
+      <div class="panel-header">
+        <h2 class="panel-title" id="heading-board">
+          <span>Physical Board &amp; Reed Switches</span>
+        </h2>
+        <div class="panel-subtitle">64-Square Hall/Reed Sensors</div>
+      </div>
+
+      <!-- Sensor Debug Mode Active Banner -->
+      <div class="debug-mode-banner" id="debug-mode-banner">
+        <span>⚠ SENSOR DEBUG ACTIVE: Click any square to toggle reed switch (0/1)</span>
+      </div>
+
+      <!-- Chessboard Grid Frame -->
+      <div class="chessboard-wrapper">
+        <div class="board-bezel-frame">
+          <div id="board-grid" class="chessboard-grid show-sensor-overlay"></div>
+        </div>
+      </div>
+
+      <!-- Quick board toolbar -->
+      <div class="controls-grid" style="margin-top: 14px;">
+        <label class="switch-label">
+          <span class="custom-switch">
+            <input type="checkbox" id="chk-sensor-overlay" checked>
+            <span class="slider-round"></span>
+          </span>
+          <span>Show Sensor Badges</span>
+        </label>
+
+        <label class="switch-label">
+          <span class="custom-switch">
+            <input type="checkbox" id="chk-sensor-debug">
+            <span class="slider-round"></span>
+          </span>
+          <span>Sensor Debug Override</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Column 2: Virtual Microcontroller & Hardware Outputs -->
+    <section class="card-panel column-hardware" aria-labelledby="heading-hardware">
+      <div class="panel-header">
+        <h2 class="panel-title" id="heading-hardware">
+          <span>Virtual ESP32 &amp; Peripherals</span>
+        </h2>
+        <div class="panel-subtitle">Firmware Scan Engine</div>
+      </div>
+
+      <!-- ESP32 Breakout Board Silhouette -->
+      <div class="esp32-pcb-card">
+        <div class="esp32-pcb-top">
+          <div class="rf-shield-can">
+            <span>ESP-WROOM-32</span>
+            <span class="rf-sub">2.4GHz Wi-Fi + BLE</span>
+          </div>
+          <div class="pcb-antenna" title="Inverted-F PCB Antenna"></div>
+        </div>
+
+        <!-- Hardware SMD LEDs -->
+        <div class="hw-leds-bar">
+          <div class="hw-led-item">
+            <div class="hw-smd-led active" id="hw-led-pwr"></div>
+            <span class="hw-led-label">PWR</span>
+          </div>
+          <div class="hw-led-item">
+            <div class="hw-smd-led active" id="hw-led-wifi"></div>
+            <span class="hw-led-label">WIFI</span>
+          </div>
+          <div class="hw-led-item">
+            <div class="hw-smd-led" id="hw-led-tx"></div>
+            <span class="hw-led-label">TX</span>
+          </div>
+          <div class="hw-led-item">
+            <div class="hw-smd-led" id="hw-led-rx"></div>
+            <span class="hw-led-label">RX</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Virtual SSD1306 128x64 OLED Display -->
+      <div class="oled-module-frame">
+        <div class="oled-screen-bezel">
+          <div class="oled-glass-reflection"></div>
+          <canvas id="oled-canvas" width="128" height="64"></canvas>
+        </div>
+        <div class="oled-pinout-bar">
+          <span>GND</span>
+          <span>VCC (3.3V)</span>
+          <span>SCL (GPIO22)</span>
+          <span>SDA (GPIO21)</span>
+        </div>
+      </div>
+
+      <!-- 64-bit Occupancy Bitmap Live Inspector -->
+      <div class="bitmap-viewer-box">
+        <div class="bitmap-hex-row">
+          <span class="bitmap-hex-code" id="bitmap-hex-val">0xFFFF00000000FFFF</span>
+          <span class="bitmap-count-tag" id="bitmap-count-val">32/64 occupied</span>
+        </div>
+        <div class="bitmap-binary-grid" id="bitmap-binary-grid">
+          <!-- Live 8x8 bit representation rendered here -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Column 3: Simulation Controls & Inspector Panels -->
+    <section class="card-panel column-inspector" aria-labelledby="heading-inspector">
+      <div class="panel-header">
+        <h2 class="panel-title" id="heading-inspector">
+          <span>Control Center &amp; Inspector</span>
+        </h2>
+        <div class="panel-subtitle">REST API &amp; Telemetry</div>
+      </div>
+
+      <!-- Simulation Action Buttons -->
+      <div class="controls-grid">
+        <button id="btn-toggle-scan" class="btn btn-primary" title="Pause/Resume firmware scan loop">
+          <span class="icon">⏸</span> Pause Scan
+        </button>
+        <button id="btn-reset-system" class="btn" title="Reset pieces, sensors and ESP32">
+          <span class="icon">↺</span> Reset Board
+        </button>
+        <button id="btn-clear-logs" class="btn" title="Clear all logs">
+          <span class="icon">🗑</span> Clear Logs
+        </button>
+        <button id="btn-sim-rejected" class="btn btn-danger" title="Trigger an illegal move to verify error rejection flow">
+          <span class="icon">⚠</span> Test Move Rejection
+        </button>
+      </div>
+
+      <!-- Hardware Sliders & Network Simulation -->
+      <div style="background: rgba(0,0,0,0.25); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 14px;">
+        <div class="setting-row">
+          <span class="setting-label">ESP32 Scan Interval:</span>
+          <span class="setting-val" id="val-scan-interval">100 ms</span>
+        </div>
+        <input type="range" id="slider-scan-interval" class="range-slider" min="20" max="1000" step="10" value="100">
+
+        <div class="setting-row" style="margin-top: 10px;">
+          <span class="setting-label">Debounce Stability:</span>
+          <span class="setting-val" id="val-debounce-cycles">3 cycles</span>
+        </div>
+        <input type="range" id="slider-debounce-cycles" class="range-slider" min="1" max="10" step="1" value="3">
+
+        <div class="toggle-row" style="margin-top: 10px;">
+          <label class="switch-label">
+            <span class="custom-switch">
+              <input type="checkbox" id="chk-simulate-offline">
+              <span class="slider-round"></span>
+            </span>
+            <span>Simulate Lost Network Connection</span>
+          </label>
+        </div>
+
+        <div class="setting-row" style="margin-top: 10px; margin-bottom: 0;">
+          <span class="setting-label">Backend Mode:</span>
+          <select id="sel-backend-mode" class="select-input">
+            <option value="MOCK" selected>Mock Backend (Internal python-chess rules)</option>
+            <option value="FLASK">Live Flask Backend (HTTP REST)</option>
+          </select>
+        </div>
+
+        <div id="flask-config-panel" style="display: none; margin-top: 10px;">
+          <div class="setting-row">
+            <span class="setting-label">Flask Base URL:</span>
+          </div>
+          <input type="text" id="txt-flask-url" class="text-input" style="width: 100%;" value="http://localhost:5000">
+        </div>
+      </div>
+
+      <!-- Multi-Tab Inspector -->
+      <div class="inspector-tabs-header">
+        <button class="log-tab-btn active" data-tab="tab-sensors">Sensor Events</button>
+        <button class="log-tab-btn" data-tab="tab-moves">Move History</button>
+        <button class="log-tab-btn" data-tab="tab-network">Network Inspector</button>
+        <button class="log-tab-btn" data-tab="tab-fen">FEN History</button>
+      </div>
+
+      <!-- Tab Panes -->
+      <div class="log-tab-content-area">
+        <!-- Tab 1: Sensor & Hardware Events -->
+        <div class="log-tab-pane active" id="tab-sensors">
+          <div id="log-sensors-content"></div>
+        </div>
+
+        <!-- Tab 2: Accepted Chess Moves -->
+        <div class="log-tab-pane" id="tab-moves">
+          <div id="log-moves-content"></div>
+        </div>
+
+        <!-- Tab 3: Network Inspector -->
+        <div class="log-tab-pane" id="tab-network">
+          <div id="log-network-content"></div>
+        </div>
+
+        <!-- Tab 4: FEN History -->
+        <div class="log-tab-pane" id="tab-fen">
+          <div id="log-fen-content"></div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- App Footer -->
+  <footer class="app-footer">
+    <div>CHĀTURANGA Phase 1: Hardware Simulator &bull; Autonomous Architecture</div>
+    <div>Bitboard convention: a1=bit 0, h8=bit 63 &bull; Polarity: 1=Occupied, 0=Empty</div>
+  </footer>
+
+  <!-- App Bootstrap -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

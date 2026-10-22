@@ -1,0 +1,427 @@
+/* =========================================================
+   CHĀTURANGA - Inspector Panels, Logs, Sliders & Controls
+   ========================================================= */
+
+/* Debug Alert Banner */
+.debug-mode-banner {
+  display: none;
+  background: rgba(255, 210, 31, 0.15);
+  border: 1px solid var(--accent-gold);
+  color: var(--accent-gold);
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.78rem;
+  font-family: var(--font-mono);
+  margin-bottom: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.debug-mode-banner.visible {
+  display: flex;
+}
+
+/* Control Controls Bar */
+.controls-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+/* Sliders & Form Inputs */
+.setting-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  font-size: 0.8rem;
+}
+
+.setting-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.setting-val {
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+  font-size: 0.78rem;
+}
+
+.range-slider {
+  width: 100%;
+  accent-color: var(--accent-cyan);
+  cursor: pointer;
+}
+
+/* Toggles & Checkboxes */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.switch-label {
+  font-size: 0.8rem;
+  color: var(--text-main);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.custom-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+
+.custom-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider-round {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #212936;
+  border: 1px solid var(--border-subtle);
+  transition: 0.25s;
+  border-radius: 20px;
+}
+
+.slider-round:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #fff;
+  transition: 0.25s;
+  border-radius: 50%;
+}
+
+input:checked + .slider-round {
+  background-color: var(--accent-cyan);
+}
+
+input:checked + .slider-round:before {
+  transform: translateX(16px);
+  background-color: #0b0f17;
+}
+
+/* Select Dropdown & Input */
+.select-input, .text-input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-main);
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  outline: none;
+}
+
+.select-input:focus, .text-input:focus {
+  border-color: var(--accent-cyan);
+}
+
+/* =========================================================
+   Inspector Tabbed Panes
+   ========================================================= */
+
+.inspector-tabs-header {
+  display: flex;
+  gap: 6px;
+  border-bottom: 1px solid var(--border-subtle);
+  margin-bottom: 12px;
+}
+
+.log-tab-btn {
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.log-tab-btn:hover {
+  color: var(--text-main);
+}
+
+.log-tab-btn.active {
+  color: var(--accent-cyan);
+  border-bottom-color: var(--accent-cyan);
+}
+
+.log-tab-content-area {
+  flex: 1;
+  position: relative;
+  min-height: 380px;
+  max-height: 520px;
+  overflow: hidden;
+}
+
+.log-tab-pane {
+  display: none;
+  height: 100%;
+  overflow-y: auto;
+  padding-right: 6px;
+}
+
+.log-tab-pane.active {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Custom Scrollbar */
+.log-tab-pane::-webkit-scrollbar {
+  width: 6px;
+}
+.log-tab-pane::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+.log-tab-pane::-webkit-scrollbar-thumb {
+  background: #232d3f;
+  border-radius: 3px;
+}
+
+.log-empty {
+  color: var(--text-dim);
+  font-size: 0.8rem;
+  font-style: italic;
+  text-align: center;
+  padding: 40px 0;
+}
+
+/* Sensor Event Entries */
+.log-entry {
+  background: rgba(14, 20, 31, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.log-time {
+  color: var(--text-dim);
+  font-size: 0.68rem;
+}
+
+.log-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  width: fit-content;
+}
+
+.badge-success { background: rgba(46, 204, 113, 0.2); color: #2ecc71; }
+.badge-error { background: rgba(255, 71, 87, 0.2); color: #ff6b81; }
+.badge-warning { background: rgba(255, 210, 31, 0.2); color: #ffd21f; }
+.badge-info { background: rgba(56, 225, 255, 0.2); color: var(--accent-cyan); }
+
+.log-diff {
+  color: #fff;
+  font-weight: 600;
+}
+
+.log-bitmap {
+  color: var(--accent-cyan);
+}
+
+.log-error {
+  color: var(--accent-red);
+}
+
+/* Move Log Entries */
+.move-entry {
+  background: rgba(14, 20, 31, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.move-entry.move-white {
+  border-left: 3px solid #dfc59d;
+}
+
+.move-entry.move-black {
+  border-left: 3px solid #34495e;
+}
+
+.move-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.move-san {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.move-uci code {
+  font-family: var(--font-mono);
+  color: var(--accent-cyan);
+  font-size: 0.75rem;
+}
+
+.move-check-flag {
+  background: rgba(255, 71, 87, 0.2);
+  color: #ff4757;
+  font-size: 0.7rem;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 800;
+}
+
+/* Network Inspector Entries */
+.network-entry {
+  background: #090e17;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-family: var(--font-mono);
+}
+
+.network-entry.status-ok {
+  border-left: 3px solid var(--accent-green);
+}
+
+.network-entry.status-err {
+  border-left: 3px solid var(--accent-red);
+}
+
+.net-row-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.75rem;
+  margin-bottom: 6px;
+}
+
+.net-method {
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-weight: 800;
+  font-size: 0.68rem;
+}
+
+.net-method.POST { background: rgba(56, 225, 255, 0.2); color: var(--accent-cyan); }
+.net-method.GET { background: rgba(46, 204, 113, 0.2); color: var(--accent-green); }
+
+.net-endpoint {
+  color: var(--text-main);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.net-status.status-ok { color: var(--accent-green); font-weight: 700; }
+.net-status.status-err { color: var(--accent-red); font-weight: 700; }
+
+.net-duration {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+}
+
+.net-details {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.net-box {
+  background: #04070c;
+  padding: 6px;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.net-label {
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.net-pre {
+  font-size: 0.68rem;
+  color: #a6c0d6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 80px;
+  overflow-y: auto;
+}
+
+.net-pre.err-text {
+  color: #ff6b81;
+}
+
+/* FEN History Entries */
+.fen-entry {
+  background: rgba(14, 20, 31, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+
+.fen-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.fen-label {
+  color: var(--accent-gold);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.btn-copy-fen {
+  background: #1c2638;
+  border: 1px solid var(--border-subtle);
+  color: var(--text-main);
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.btn-copy-fen:hover {
+  background: var(--accent-cyan);
+  color: #000;
+}
+
+.fen-string code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent-cyan);
+  word-break: break-all;
+}

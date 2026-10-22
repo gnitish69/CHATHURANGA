@@ -1,0 +1,19 @@
+{
+  "name": "chaturanga-phase1-hardware-simulator",
+  "version": "1.0.0",
+  "description": "CHĀTURANGA Phase 1: Browser-based Hardware Simulator for AI Electronic Chessboard",
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/sensorBitmap.test.js tests/mockBackend.test.js tests/esp32Debounce.test.js tests/apiService.test.js",
+    "start": "node -e \"const http=require('http'), fs=require('fs'), path=require('path'); const mime={'.html':'text/html','.js':'application/javascript','.css':'text/css','.png':'image/png','.svg':'image/svg+xml','.json':'application/json'}; http.createServer((req,res)=>{ let p=path.join('.', req.url === '/' ? 'index.html' : req.url.split('?')[0]); if(!fs.existsSync(p)){ res.writeHead(404); return res.end('Not found'); } res.writeHead(200, {'Content-Type': mime[path.extname(p)] || 'text/plain'}); fs.createReadStream(p).pipe(res); }).listen(3000, ()=>console.log('CHĀTURANGA Simulator running at http://localhost:3000'));\""
+  },
+  "keywords": [
+    "chess",
+    "esp32",
+    "hardware-simulator",
+    "reed-switches",
+    "chaturanga"
+  ],
+  "author": "CHĀTURANGA Team",
+  "license": "MIT"
+}

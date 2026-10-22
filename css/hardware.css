@@ -1,0 +1,255 @@
+/* =========================================================
+   CHĀTURANGA - Hardware Simulator: ESP32 & OLED Display
+   ========================================================= */
+
+/* ESP32 Module Breakdown */
+.esp32-pcb-card {
+  background: linear-gradient(135deg, #09131a 0%, #0d1e28 100%);
+  border: 2px solid #1a3848;
+  border-radius: var(--radius-md);
+  padding: 16px;
+  position: relative;
+  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.7), 0 8px 24px rgba(0, 0, 0, 0.5);
+  margin-bottom: 16px;
+}
+
+.esp32-pcb-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 14px;
+}
+
+/* Metal RF Shield Can */
+.rf-shield-can {
+  background: linear-gradient(135deg, #bccad6 0%, #7d8c99 50%, #586573 100%);
+  border: 1px solid #dbe6ef;
+  border-radius: 4px;
+  padding: 8px 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.6);
+  color: #17212b;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: center;
+}
+
+.rf-shield-can .rf-sub {
+  font-size: 7px;
+  opacity: 0.75;
+}
+
+/* PCB Antenna Trace */
+.pcb-antenna {
+  width: 48px;
+  height: 28px;
+  border: 2px solid #c9933b;
+  border-bottom: none;
+  position: relative;
+  background: repeating-linear-gradient(
+    90deg,
+    transparent,
+    transparent 4px,
+    #c9933b 4px,
+    #c9933b 6px
+  );
+  opacity: 0.85;
+}
+
+/* Hardware SMD LEDs */
+.hw-leds-bar {
+  display: flex;
+  justify-content: space-around;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.hw-led-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.hw-led-label {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-dim);
+  font-weight: 700;
+}
+
+.hw-smd-led {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  background: #17202a;
+  border: 1px solid #283747;
+  transition: all 0.08s ease;
+}
+
+/* PWR LED (Red/Orange) */
+#hw-led-pwr.active {
+  background: #ff4757;
+  box-shadow: 0 0 10px #ff4757, 0 0 16px rgba(255, 71, 87, 0.8);
+}
+
+/* WIFI LED (Blue/Cyan) */
+#hw-led-wifi.active {
+  background: #2ecc71;
+  box-shadow: 0 0 10px #2ecc71, 0 0 16px rgba(46, 204, 113, 0.8);
+}
+
+/* TX LED (Cyan) */
+#hw-led-tx.active {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 10px var(--accent-cyan), 0 0 16px var(--accent-cyan-glow);
+}
+
+/* RX LED (Yellow) */
+#hw-led-rx.active {
+  background: var(--accent-gold);
+  box-shadow: 0 0 10px var(--accent-gold), 0 0 16px rgba(255, 210, 31, 0.8);
+}
+
+/* =========================================================
+   SSD1306 128x64 OLED Display Emulation
+   ========================================================= */
+
+.oled-module-frame {
+  background: #0d121c;
+  border: 2px solid #222d3d;
+  border-radius: var(--radius-md);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6);
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.oled-screen-bezel {
+  background: #03060a;
+  padding: 8px;
+  border-radius: 6px;
+  border: 2px solid #141b26;
+  box-shadow: inset 0 0 12px #000, 0 0 20px rgba(56, 225, 255, 0.08);
+  position: relative;
+}
+
+.oled-glass-reflection {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 45%;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04) 0%, transparent 100%);
+  pointer-events: none;
+  border-radius: 4px 4px 0 0;
+}
+
+#oled-canvas {
+  width: 256px;
+  height: 128px;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  border-radius: 2px;
+}
+
+.oled-pinout-bar {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  color: var(--text-dim);
+}
+
+.oled-pinout-bar span {
+  padding: 1px 4px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 2px;
+}
+
+/* =========================================================
+   64-bit Occupancy Bitmap Viewer
+   ========================================================= */
+
+.bitmap-viewer-box {
+  background: rgba(11, 15, 23, 0.9);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-family: var(--font-mono);
+}
+
+.bitmap-hex-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.bitmap-hex-code {
+  font-size: 0.95rem;
+  color: var(--accent-gold);
+  font-weight: 700;
+  letter-spacing: 1px;
+}
+
+.bitmap-count-tag {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* 8x8 Binary Matrix Grid */
+.bitmap-binary-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: #06090e;
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.bin-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bin-rank-num {
+  font-size: 9px;
+  color: var(--text-dim);
+  width: 18px;
+}
+
+.bit-dot {
+  font-size: 9px;
+  width: 13px;
+  height: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 2px;
+  transition: all 0.1s ease;
+}
+
+.bit-1 {
+  background: rgba(46, 204, 113, 0.3);
+  color: #2ecc71;
+  font-weight: 800;
+}
+
+.bit-0 {
+  background: rgba(255, 255, 255, 0.03);
+  color: #3e4b5e;
+}

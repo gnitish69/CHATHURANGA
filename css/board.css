@@ -1,0 +1,280 @@
+/* =========================================================
+   CHĀTURANGA - Chessboard, Pieces, LEDs & Sensor Badges
+   ========================================================= */
+
+.chessboard-wrapper {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.board-bezel-frame {
+  background: linear-gradient(145deg, #1f2533, #0f1420);
+  border: 3px solid #2d374d;
+  box-shadow:
+    inset 0 2px 4px rgba(255, 255, 255, 0.05),
+    0 15px 35px rgba(0, 0, 0, 0.8),
+    0 0 25px rgba(56, 225, 255, 0.08);
+  border-radius: var(--radius-md);
+  padding: 12px;
+  position: relative;
+  max-width: 540px;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+}
+
+.chessboard-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+  user-select: none;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+/* Squares */
+.board-square {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease;
+}
+
+.board-square.light {
+  background-color: #d6b88b;
+  background-image: radial-gradient(circle at 50% 50%, #dfc59d 0%, #cfaf80 100%);
+}
+
+.board-square.dark {
+  background-color: #8a5732;
+  background-image: radial-gradient(circle at 50% 50%, #945f38 0%, #7d4d29 100%);
+}
+
+.board-square.drag-over {
+  background-color: rgba(56, 225, 255, 0.3) !important;
+}
+
+.board-square.selected-piece {
+  box-shadow: inset 0 0 0 3px var(--accent-gold);
+}
+
+/* Square Coordinates */
+.square-coord {
+  position: absolute;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  pointer-events: none;
+  z-index: 5;
+  opacity: 0.65;
+}
+
+.board-square.light .square-coord {
+  color: #8a5732;
+}
+
+.board-square.dark .square-coord {
+  color: #dfc59d;
+}
+
+.coord-rank {
+  top: 3px;
+  left: 4px;
+}
+
+.coord-file {
+  bottom: 3px;
+  right: 4px;
+}
+
+/* Pieces */
+.piece-slot {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+
+.piece-element {
+  width: 82%;
+  height: 82%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  transition: transform 0.12s cubic-bezier(0.2, 0.8, 0.2, 1);
+  filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.45));
+}
+
+.piece-element:hover {
+  transform: scale(1.08);
+}
+
+.piece-element.dragging {
+  cursor: grabbing;
+  opacity: 0.35;
+  transform: scale(1.15);
+}
+
+.chess-piece {
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Sensor State Badges (Reed Switch Visualizer) */
+.sensor-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-weight: 800;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 15;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  transition: all 0.2s ease;
+  pointer-events: none;
+}
+
+.show-sensor-overlay .sensor-badge {
+  display: flex;
+}
+
+.sensor-badge.occupied {
+  background: var(--accent-green);
+  color: #062b14;
+  box-shadow: 0 0 8px rgba(46, 204, 113, 0.8);
+}
+
+.sensor-badge.empty {
+  background: rgba(40, 48, 64, 0.85);
+  color: var(--text-dim);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+/* Sensor Debug Mode Interaction */
+.debug-mode-active .board-square {
+  cursor: pointer;
+}
+
+.debug-mode-active .board-square:hover {
+  outline: 2px dashed var(--accent-gold);
+}
+
+/* =========================================================
+   Virtual LEDs System (Corner micro-LEDs & Underglow)
+   ========================================================= */
+
+.square-led-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.square-led-layer.active {
+  opacity: 1;
+}
+
+/* 4 Corner LEDs */
+.led-corner {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  transition: all 0.2s ease;
+}
+
+.led-tl { top: 4px; left: 4px; }
+.led-tr { top: 4px; right: 4px; }
+.led-bl { bottom: 4px; left: 4px; }
+.led-br { bottom: 4px; right: 4px; }
+
+.led-underglow {
+  position: absolute;
+  inset: 0;
+  border-radius: 2px;
+  opacity: 0.45;
+}
+
+/* Colors */
+/* GREEN */
+.led-green .led-corner {
+  background: #2ecc71;
+  box-shadow: 0 0 8px #2ecc71, 0 0 14px rgba(46, 204, 113, 0.9);
+}
+.led-green .led-underglow {
+  background: radial-gradient(circle, rgba(46, 204, 113, 0.45) 0%, rgba(46, 204, 113, 0.05) 70%, transparent 100%);
+  border: 2px solid rgba(46, 204, 113, 0.7);
+}
+
+/* CYAN */
+.led-cyan .led-corner {
+  background: var(--accent-cyan);
+  box-shadow: 0 0 8px var(--accent-cyan), 0 0 14px var(--accent-cyan-glow);
+}
+.led-cyan .led-underglow {
+  background: radial-gradient(circle, rgba(56, 225, 255, 0.45) 0%, rgba(56, 225, 255, 0.05) 70%, transparent 100%);
+  border: 2px solid rgba(56, 225, 255, 0.7);
+}
+
+/* RED */
+.led-red .led-corner {
+  background: #ff4757;
+  box-shadow: 0 0 8px #ff4757, 0 0 14px rgba(255, 71, 87, 0.9);
+}
+.led-red .led-underglow {
+  background: radial-gradient(circle, rgba(255, 71, 87, 0.5) 0%, rgba(255, 71, 87, 0.05) 70%, transparent 100%);
+  border: 2px solid rgba(255, 71, 87, 0.85);
+}
+
+/* YELLOW / AMBER */
+.led-yellow .led-corner {
+  background: #ffd21f;
+  box-shadow: 0 0 8px #ffd21f, 0 0 14px rgba(255, 210, 31, 0.9);
+}
+.led-yellow .led-underglow {
+  background: radial-gradient(circle, rgba(255, 210, 31, 0.4) 0%, rgba(255, 210, 31, 0.05) 70%, transparent 100%);
+  border: 2px solid rgba(255, 210, 31, 0.75);
+}
+
+/* Modes */
+.led-pulse {
+  animation: ledPulse 1.4s infinite ease-in-out;
+}
+
+@keyframes ledPulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.98); }
+  50% { opacity: 1; transform: scale(1.02); }
+}
+
+.led-flash {
+  animation: ledFlash 0.22s infinite alternate ease-in-out;
+}
+
+@keyframes ledFlash {
+  0% { opacity: 0.15; }
+  100% { opacity: 1; }
+}
