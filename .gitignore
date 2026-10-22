@@ -4,3 +4,5 @@ desktop.ini
 Thumbs.db
 __pycache__/
 *.pyc
+engines/
+.pytest_cache/
