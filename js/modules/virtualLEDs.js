@@ -121,6 +121,36 @@ export class VirtualLEDs {
   }
 
   /**
+   * Blink the piece computer wants to move
+   */
+  indicateComputerMove(fromSq) {
+    this.clearAll();
+    if (fromSq) {
+      this.setSquareLED(fromSq, 'YELLOW', 'FLASH');
+    }
+  }
+
+  /**
+   * Blink where to place the picked up piece
+   */
+  indicatePiecePickedUp(fromSq, toSq) {
+    this.clearAll();
+    if (toSq) {
+      this.setSquareLED(toSq, 'GREEN', 'FLASH');
+    }
+  }
+
+  /**
+   * Blink captured piece to be removed
+   */
+  indicateCapture(victimSq) {
+    this.clearAll();
+    if (victimSq) {
+      this.setSquareLED(victimSq, 'MAGENTA', 'FLASH');
+    }
+  }
+
+  /**
    * Render LED visual state in DOM for a square
    */
   _renderSquare(sq) {

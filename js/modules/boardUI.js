@@ -51,9 +51,14 @@ export class BoardUI {
     this.draggedPiece = null;
     this.selectedSquare = null;
     this.isDragging = false;
+    this.capturedWhite = [];
+    this.capturedBlack = [];
     this.render();
+    this.renderCapturedTrays();
     this.sensorMatrix.initFromPieces(this.pieces);
     this.virtualLEDs.clearAll();
+    this.clearMoveArrow();
+    this.clearMoveGuidance();
   }
 
   setShowSensorsOverlay(show) {
@@ -361,17 +366,12 @@ export class BoardUI {
       this.sensorMatrix.setPhysicalPresence(fromSq, false);
     }
 
-    // If destination square had an enemy piece, send captured piece to tray
-    const existingTargetPiece = this.pieces[toSq];
-    if (existingTargetPiece) {
-      this.addCapturedPiece(existingTargetPiece);
-    }
-
     this.pieces[toSq] = piece;
     this.sensorMatrix.setPhysicalPresence(toSq, true);
 
     this.renderPieces();
     this.updateSensorIndicators();
+    this.updateCapturedPieces();
 
     if (this.onPieceDropCallback) {
       this.onPieceDropCallback(fromSq, toSq, piece);
@@ -416,50 +416,106 @@ export class BoardUI {
   }
 
   addCapturedPiece(piece) {
-    const isWhite = piece === piece.toUpperCase();
-    if (isWhite) {
-      this.capturedWhite.push(piece);
-    } else {
-      this.capturedBlack.push(piece);
+    if (!piece) return;
+    this.updateCapturedPieces();
+  }
+
+  /**
+   * Authoritatively computes captured pieces from current pieces on the board
+   */
+  updateCapturedPieces() {
+    const startingCounts = {
+      white: { P: 8, N: 2, B: 2, R: 2, Q: 1 },
+      black: { p: 8, n: 2, b: 2, r: 2, q: 1 }
+    };
+
+    const currentCounts = {
+      white: { P: 0, N: 0, B: 0, R: 0, Q: 0 },
+      black: { p: 0, n: 0, b: 0, r: 0, q: 0 }
+    };
+
+    for (const piece of Object.values(this.pieces)) {
+      if (!piece) continue;
+      if (currentCounts.white[piece] !== undefined) {
+        currentCounts.white[piece]++;
+      } else if (currentCounts.black[piece] !== undefined) {
+        currentCounts.black[piece]++;
+      }
     }
+
+    // Pieces captured by White: Black pieces missing from board
+    const capturedByWhite = [];
+    const pieceOrderBlack = ['q', 'r', 'b', 'n', 'p'];
+    for (const p of pieceOrderBlack) {
+      const missing = (startingCounts.black[p] || 0) - (currentCounts.black[p] || 0);
+      for (let i = 0; i < missing; i++) {
+        capturedByWhite.push(p);
+      }
+    }
+
+    // Pieces captured by Black: White pieces missing from board
+    const capturedByBlack = [];
+    const pieceOrderWhite = ['Q', 'R', 'B', 'N', 'P'];
+    for (const p of pieceOrderWhite) {
+      const missing = (startingCounts.white[p] || 0) - (currentCounts.white[p] || 0);
+      for (let i = 0; i < missing; i++) {
+        capturedByBlack.push(p);
+      }
+    }
+
+    this.capturedWhite = capturedByWhite;
+    this.capturedBlack = capturedByBlack;
     this.renderCapturedTrays();
   }
 
   renderCapturedTrays() {
+    const pieceNames = {
+      p: 'Black Pawn', r: 'Black Rook', n: 'Black Knight', b: 'Black Bishop', q: 'Black Queen',
+      P: 'White Pawn', R: 'White Rook', N: 'White Knight', B: 'White Bishop', Q: 'White Queen'
+    };
+
     if (this.whiteTrayEl) {
       const listEl = this.whiteTrayEl.querySelector('.captured-pieces-list') || this.whiteTrayEl;
       listEl.innerHTML = '';
-      this.capturedWhite.forEach((p, idx) => {
-        const item = document.createElement('div');
-        item.className = 'captured-piece-item';
-        item.draggable = true;
-        item.innerHTML = PIECE_SVGS[p] || p;
-        item.title = `White ${p} (drag onto board to restore)`;
-        item.addEventListener('dragstart', (e) => {
-          this.draggedTrayPiece = p;
-          e.dataTransfer.setData('text/plain', `tray_w_${idx}`);
-          e.dataTransfer.effectAllowed = 'move';
+      if (!this.capturedWhite || this.capturedWhite.length === 0) {
+        listEl.innerHTML = '<span class="captured-empty-hint">None</span>';
+      } else {
+        this.capturedWhite.forEach((p, idx) => {
+          const item = document.createElement('div');
+          item.className = 'captured-piece-item';
+          item.draggable = true;
+          item.innerHTML = PIECE_SVGS[p] || p;
+          item.title = `${pieceNames[p] || p} (captured by White)`;
+          item.addEventListener('dragstart', (e) => {
+            this.draggedTrayPiece = p;
+            e.dataTransfer.setData('text/plain', `tray_w_${idx}`);
+            e.dataTransfer.effectAllowed = 'move';
+          });
+          listEl.appendChild(item);
         });
-        listEl.appendChild(item);
-      });
+      }
     }
 
     if (this.blackTrayEl) {
       const listEl = this.blackTrayEl.querySelector('.captured-pieces-list') || this.blackTrayEl;
       listEl.innerHTML = '';
-      this.capturedBlack.forEach((p, idx) => {
-        const item = document.createElement('div');
-        item.className = 'captured-piece-item';
-        item.draggable = true;
-        item.innerHTML = PIECE_SVGS[p] || p;
-        item.title = `Black ${p} (drag onto board to restore)`;
-        item.addEventListener('dragstart', (e) => {
-          this.draggedTrayPiece = p;
-          e.dataTransfer.setData('text/plain', `tray_b_${idx}`);
-          e.dataTransfer.effectAllowed = 'move';
+      if (!this.capturedBlack || this.capturedBlack.length === 0) {
+        listEl.innerHTML = '<span class="captured-empty-hint">None</span>';
+      } else {
+        this.capturedBlack.forEach((p, idx) => {
+          const item = document.createElement('div');
+          item.className = 'captured-piece-item';
+          item.draggable = true;
+          item.innerHTML = PIECE_SVGS[p] || p;
+          item.title = `${pieceNames[p] || p} (captured by Black)`;
+          item.addEventListener('dragstart', (e) => {
+            this.draggedTrayPiece = p;
+            e.dataTransfer.setData('text/plain', `tray_b_${idx}`);
+            e.dataTransfer.effectAllowed = 'move';
+          });
+          listEl.appendChild(item);
         });
-        listEl.appendChild(item);
-      });
+      }
     }
   }
 
@@ -482,6 +538,107 @@ export class BoardUI {
     this.renderPieces();
     this.sensorMatrix.initFromPieces(this.pieces);
     this.updateSensorIndicators();
+  }
+
+  /**
+   * Reconstruct board piece state and physical sensors from standard FEN
+   */
+  syncFromFEN(fen) {
+    if (!fen) return;
+    const parts = fen.split(' ');
+    const position = parts[0];
+    const newPieces = {};
+
+    const rows = position.split('/');
+    for (let r = 0; r < 8; r++) {
+      const rank = 8 - r;
+      const rowStr = rows[r];
+      let fileIdx = 0;
+      for (const char of rowStr) {
+        if (!isNaN(parseInt(char, 10))) {
+          fileIdx += parseInt(char, 10);
+        } else {
+          const file = FILES[fileIdx];
+          newPieces[`${file}${rank}`] = char;
+          fileIdx++;
+        }
+      }
+    }
+
+    this.pieces = newPieces;
+    this.selectedSquare = null;
+    this.draggedSquare = null;
+    this.draggedPiece = null;
+    this._clearSelected();
+    this.renderPieces();
+    this.sensorMatrix.initFromPieces(this.pieces);
+    this.updateSensorIndicators();
+    this.updateCapturedPieces();
+    this.clearMoveArrow();
+    this.clearMoveGuidance();
+  }
+
+  /**
+   * Draw dynamic directional arrow - disabled per user preference for authentic physical LED blinking
+   */
+  drawMoveArrow(fromSq, toSq) {
+    this.clearMoveArrow();
+  }
+
+  clearMoveArrow() {
+    const svgGroup = document.getElementById('arrow-path-group');
+    if (svgGroup) svgGroup.innerHTML = '';
+  }
+
+  /**
+   * Highlight source (gold) and target (green) squares on the board
+   */
+  highlightMoveGuidance(fromSq, toSq) {
+    this.clearMoveGuidance();
+    if (fromSq) {
+      const fromEl = this.container.querySelector(`[data-square="${fromSq.toLowerCase()}"]`);
+      if (fromEl) fromEl.classList.add('guidance-from');
+    }
+    if (toSq) {
+      const toEl = this.container.querySelector(`[data-square="${toSq.toLowerCase()}"]`);
+      if (toEl) toEl.classList.add('guidance-to');
+    }
+  }
+
+  clearMoveGuidance() {
+    const prevFrom = this.container.querySelectorAll('.guidance-from');
+    const prevTo = this.container.querySelectorAll('.guidance-to');
+    prevFrom.forEach(el => el.classList.remove('guidance-from'));
+    prevTo.forEach(el => el.classList.remove('guidance-to'));
+  }
+
+  /**
+   * Automatically execute a move on the board (used for hands-free computer moves)
+   */
+  autoMovePiece(fromSq, toSq) {
+    const f = fromSq.toLowerCase();
+    const t = toSq.toLowerCase();
+    const piece = this.pieces[f];
+    if (!piece) return false;
+
+    // Remove from source
+    delete this.pieces[f];
+    this.sensorMatrix.setPhysicalPresence(f, false);
+
+    // If destination occupied by enemy piece, update presence
+    const existing = this.pieces[t];
+    if (existing) {
+      delete this.pieces[t];
+    }
+
+    // Place on destination
+    this.pieces[t] = piece;
+    this.sensorMatrix.setPhysicalPresence(t, true);
+
+    this.renderPieces();
+    this.updateSensorIndicators();
+    this.updateCapturedPieces();
+    return true;
   }
 
   onPieceLift(cb) { this.onPieceLiftCallback = cb; }

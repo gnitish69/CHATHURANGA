@@ -237,6 +237,7 @@ export class VirtualESP32 {
 
   async _handleNetworkFailure(diff, bitmapBigInt, err) {
     this.retryCount++;
+    const isSimulatedOffline = !!this.apiService.simulateOffline;
     this._notifySensorEvent({
       timestamp: new Date().toISOString(),
       type: 'NET_ERROR',
@@ -247,10 +248,10 @@ export class VirtualESP32 {
 
     if (this.retryCount <= this.maxRetries) {
       this.state = ESP_STATES.RETRY;
-      this.wifiStatus = 'RECONNECTING';
-      this.hwLeds.wifi = false;
+      this.wifiStatus = isSimulatedOffline ? 'RECONNECTING' : 'CONNECTED';
+      this.hwLeds.wifi = !isSimulatedOffline;
       this.virtualOLED.update({
-        wifiStatus: 'RECONNECTING',
+        wifiStatus: this.wifiStatus,
         message: `NET RETRY ${this.retryCount}/${this.maxRetries}`,
         isError: true,
         scanState: 'RETRY'
@@ -265,14 +266,14 @@ export class VirtualESP32 {
       }, HARDWARE_CONFIG.RETRY_BACKOFF_MS * this.retryCount);
     } else {
       // Max retries exceeded
-      this.state = ESP_STATES.ERROR;
-      this.wifiStatus = 'OFFLINE';
-      this.hwLeds.wifi = false;
+      this.state = ESP_STATES.IDLE;
+      this.wifiStatus = isSimulatedOffline ? 'OFFLINE' : 'CONNECTED';
+      this.hwLeds.wifi = !isSimulatedOffline;
       this.virtualOLED.update({
-        wifiStatus: 'OFFLINE',
-        message: 'ERR: NET OFFLINE',
-        isError: true,
-        scanState: 'ERROR'
+        wifiStatus: this.wifiStatus,
+        message: isSimulatedOffline ? 'ERR: NET OFFLINE' : 'BACKEND OFFLINE',
+        isError: isSimulatedOffline,
+        scanState: 'IDLE'
       });
       this._notifyStateChange();
     }
@@ -317,4 +318,20 @@ export class VirtualESP32 {
   _notifyHwLedChange() { for (const cb of this.listeners.hwLedChange) cb(this.hwLeds); }
   _notifyMoveConfirmed(moveData) { for (const cb of this.listeners.moveConfirmed) cb(moveData); }
   _notifyScanResponse(resp) { for (const cb of this.listeners.scanResponse) cb(resp); }
+
+  setLEDCommand(command) {
+    if (this.virtualLEDs) {
+      if (command && command.squares) {
+        this.virtualLEDs.setLEDCommand(command);
+      } else if (command && typeof command === 'object') {
+        this.virtualLEDs.setLEDCommand({ squares: command, clearOthers: true });
+      }
+    }
+  }
+
+  clearLEDCommand() {
+    if (this.virtualLEDs) {
+      this.virtualLEDs.clearAll();
+    }
+  }
 }

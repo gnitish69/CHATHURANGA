@@ -33,7 +33,8 @@ export class MockBackend {
       isGameOver: this.isGameOver,
       statusMessage: this.statusMessage,
       moveCount: this.moveHistory.length,
-      history: [...this.moveHistory]
+      history: [...this.moveHistory],
+      move_history: [...this.moveHistory]
     };
   }
 
@@ -147,9 +148,11 @@ export class MockBackend {
     );
 
     if (!matchedMove) {
+      const reason = this._diagnoseIllegalMove(fromSq, toSq, piece, isWhite);
       return {
         status: 'rejected',
-        reason: `Illegal move ${candidateUci} for ${piece}`,
+        reason,
+        offending_squares: [fromSq, toSq],
         leds: { [fromSq]: 'RED', [toSq]: 'RED' },
         oled_message: `ILLEGAL: ${candidateUci}`
       };
@@ -616,5 +619,119 @@ export class MockBackend {
     let promoStr = move.promotion ? `=${move.promotion.toUpperCase()}` : '';
     let checkStr = this.isCheck ? (this.isGameOver ? '#' : '+') : '';
     return `${prefix}${capStr}${move.to}${promoStr}${checkStr}`;
+  }
+
+  /**
+   * Generates standard PGN string formatted according to chess standards
+   */
+  getPGN(options = {}) {
+    const event = options.event || 'CHĀTURANGA Match';
+    const site = options.site || 'Physical Electronic Chessboard';
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
+    const whitePlayer = options.white || 'White';
+    const blackPlayer = options.black || 'Black';
+    let result = '*';
+    if (this.isGameOver) {
+      if (this.isCheck) {
+        result = this.turn === 'w' ? '0-1' : '1-0';
+      } else {
+        result = '1/2-1/2';
+      }
+    }
+
+    const headers = [
+      `[Event "${event}"]`,
+      `[Site "${site}"]`,
+      `[Date "${dateStr}"]`,
+      `[Round "1"]`,
+      `[White "${whitePlayer}"]`,
+      `[Black "${blackPlayer}"]`,
+      `[Result "${result}"]`
+    ];
+
+    const movesTextArr = [];
+    for (let i = 0; i < this.moveHistory.length; i++) {
+      const move = this.moveHistory[i];
+      const san = move.san || move.uci || '';
+      if (i % 2 === 0) {
+        const moveNumber = Math.floor(i / 2) + 1;
+        movesTextArr.push(`${moveNumber}. ${san}`);
+      } else {
+        movesTextArr.push(`${san}`);
+      }
+    }
+
+    if (result !== '*') {
+      movesTextArr.push(result);
+    }
+
+    const pgnBody = movesTextArr.join(' ');
+    return `${headers.join('\n')}\n\n${pgnBody || '*'}\n`;
+  }
+
+  _diagnoseIllegalMove(fromSq, toSq, piece, isWhite) {
+    const pieceType = piece.toUpperCase();
+    const targetPiece = this.board[toSq];
+
+    if (this.isCheck) {
+      return `Illegal move: Your King is in CHECK! You must protect your King, block the attack, or capture the checking piece.`;
+    }
+
+    if (targetPiece && (targetPiece === targetPiece.toUpperCase()) === isWhite) {
+      return `Illegal move: Cannot move to ${toSq.toUpperCase()} because square is already occupied by your own piece.`;
+    }
+
+    const fromFile = fromSq.charCodeAt(0) - 97;
+    const fromRank = parseInt(fromSq[1]);
+    const toFile = toSq.charCodeAt(0) - 97;
+    const toRank = parseInt(toSq[1]);
+    const dFile = Math.abs(toFile - fromFile);
+    const dRank = Math.abs(toRank - fromRank);
+
+    switch (pieceType) {
+      case 'P':
+        const forward = isWhite ? 1 : -1;
+        if ((toRank - fromRank) * forward < 0) {
+          return `Illegal move: Pawns cannot move backwards (${fromSq.toUpperCase()} -> ${toSq.toUpperCase()}).`;
+        }
+        if (fromFile === toFile && targetPiece) {
+          return `Illegal move: Pawn path forward is blocked on ${toSq.toUpperCase()}.`;
+        }
+        if (fromFile !== toFile && !targetPiece) {
+          return `Illegal move: Pawns only move diagonally when capturing an opponent piece.`;
+        }
+        return `Illegal move: Pawn cannot make that move from ${fromSq.toUpperCase()} to ${toSq.toUpperCase()}.`;
+
+      case 'N':
+        return `Illegal move: Knights can only move in an L-shape (2 squares in one direction, 1 square perpendicular). ${toSq.toUpperCase()} is not a legal knight jump from ${fromSq.toUpperCase()}.`;
+
+      case 'B':
+        if (dFile !== dRank) {
+          return `Illegal move: Bishops can only move diagonally. ${toSq.toUpperCase()} is not diagonal from ${fromSq.toUpperCase()}.`;
+        }
+        return `Illegal move: Bishop on ${fromSq.toUpperCase()} cannot reach ${toSq.toUpperCase()} because its diagonal path is blocked.`;
+
+      case 'R':
+        if (dFile !== 0 && dRank !== 0) {
+          return `Illegal move: Rooks can only move horizontally or vertically.`;
+        }
+        return `Illegal move: Rook on ${fromSq.toUpperCase()} cannot reach ${toSq.toUpperCase()} because its path is blocked.`;
+
+      case 'Q':
+        if (dFile !== dRank && dFile !== 0 && dRank !== 0) {
+          return `Illegal move: Queens can only move diagonally, horizontally, or vertically.`;
+        }
+        return `Illegal move: Queen on ${fromSq.toUpperCase()} cannot reach ${toSq.toUpperCase()} because its path is blocked.`;
+
+      case 'K':
+        if (dFile > 1 || dRank > 1) {
+          return `Illegal move: Kings can only move 1 square in any direction (or castle), and cannot step into check.`;
+        }
+        return `Illegal move: King cannot move to ${toSq.toUpperCase()}: destination square is attacked or illegal.`;
+
+      default:
+        return `Illegal move for ${piece} from ${fromSq.toUpperCase()} to ${toSq.toUpperCase()}.`;
+    }
   }
 }

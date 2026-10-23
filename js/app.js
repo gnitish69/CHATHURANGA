@@ -41,6 +41,12 @@ class ChaturangaSimulatorApp {
     this.engineStatusInterval = null;
     this.lastEngineStatus = null;
     this.engineThinkingInterval = null;
+
+    // Player Experience Features
+    this.currentView = 'player'; // 'player' | 'lab'
+    this.autoPlayComputerMoves = true;
+    this.lastEvalScore = 0.0;
+    this._isAutoMoving = false;
   }
 
   async init() {
@@ -84,11 +90,14 @@ class ChaturangaSimulatorApp {
     // 7. Bind Interactive UI Controls (Phase 1, 2, and 3)
     this._bindControls();
     this._bindPhase3Controls();
+    this._initViewMode();
 
     // 8. Boot ESP32 and Record Initial State
     this.virtualESP32.init();
     this.eventLogger.logFEN(HARDWARE_CONFIG.STARTING_FEN, 'Starting Position');
     this._updateBitmapDisplay();
+    this._updateWinProbability(HARDWARE_CONFIG.STARTING_FEN);
+    this.setAIMood('neutral', "I'm ready. Make your opening move!");
 
     // 9. Start Engine Health Polling (Every 3 seconds)
     this._startEngineStatusPolling();
@@ -141,12 +150,30 @@ class ChaturangaSimulatorApp {
     // F. Authoritative Scan Response -> Guidance, Recovery, Promotion UI & Live Moves
     this.virtualESP32.onScanResponse((resp) => {
       this._updateGamePhaseUI(resp);
-      if (resp && resp.move_history) {
-        this._renderLiveMoveHistory(resp.move_history);
+      const history = resp?.move_history || resp?.history;
+      if (history) {
+        this._renderLiveMoveHistory(history);
       }
     });
 
-    // G. ApiService REST Traffic -> Inspector Log
+    // G. BoardUI Piece Lift -> Instantly switch LED guidance from pickup to placement!
+    this.boardUI.onPieceLift((sq, piece) => {
+      if (this.currentPhase === 'GUIDING_ENGINE_MOVE' && this.lastGuidance) {
+        const fromSq = this.lastGuidance.from_square?.toLowerCase();
+        const toSq = this.lastGuidance.to_square?.toLowerCase();
+        if (sq.toLowerCase() === fromSq && toSq) {
+          this.boardUI.clearMoveGuidance();
+          this.boardUI.highlightMoveGuidance(null, toSq);
+          this.virtualLEDs.indicatePiecePickedUp(fromSq, toSq);
+          const subEl = document.getElementById('phase-banner-sub');
+          if (subEl) subEl.textContent = `Place piece on ${toSq.toUpperCase()} (Blinking Green LED)`;
+          const stepInst = document.getElementById('guidance-instruction');
+          if (stepInst) stepInst.textContent = `Place piece on ${toSq.toUpperCase()} (Blinking Green LED)`;
+        }
+      }
+    });
+
+    // H. ApiService REST Traffic -> Inspector Log
     this.apiService.onTraffic((trafficEntry) => {
       this.eventLogger.logNetworkEvent(trafficEntry);
     });
@@ -250,11 +277,9 @@ class ChaturangaSimulatorApp {
         if (state && state.phase !== 'ENGINE_THINKING') {
           this._stopEngineThinkingPolling();
           this._updateGamePhaseUI(state);
-          if (state.move_history) {
-            this._renderLiveMoveHistory(state.move_history);
-          }
-          if (state.leds) {
-            this.virtualESP32.setLEDCommand(state.leds);
+          const history = state.move_history || state.history;
+          if (history) {
+            this._renderLiveMoveHistory(history);
           }
           if (state.oled_message) {
             this.virtualOLED.update({
@@ -299,6 +324,7 @@ class ChaturangaSimulatorApp {
 
     // 2. Phase-specific Card Switching
     const phase = resp.phase || (resp.status === 'recovery' ? 'RECOVERY' : 'WAITING_MOVE');
+    this.currentPhase = phase;
 
     if (bannerEl) {
       bannerEl.className = 'phase-status-banner';
@@ -315,8 +341,9 @@ class ChaturangaSimulatorApp {
     }
 
     // Update live move history if available
-    if (resp.move_history) {
-      this._renderLiveMoveHistory(resp.move_history);
+    const history = resp.move_history || resp.history;
+    if (history) {
+      this._renderLiveMoveHistory(history);
     }
 
     // Reset modals/cards unless triggered
@@ -324,6 +351,19 @@ class ChaturangaSimulatorApp {
     if (recoveryBox) recoveryBox.style.display = 'none';
     if (promoModal && phase !== 'AWAITING_PROMOTION_CHOICE') {
       promoModal.classList.remove('visible');
+    }
+
+    // Update active player highlight in match status card
+    const cardWhite = document.getElementById('card-player-white');
+    const cardBlack = document.getElementById('card-player-black');
+    const currentTurn = (resp.side_to_move || resp.turn || 'white').toLowerCase();
+
+    if (currentTurn === 'white') {
+      cardWhite?.classList.add('active-player');
+      cardBlack?.classList.remove('active-player');
+    } else {
+      cardBlack?.classList.add('active-player');
+      cardWhite?.classList.remove('active-player');
     }
 
     switch (phase) {
@@ -339,6 +379,16 @@ class ChaturangaSimulatorApp {
         const side = (resp.side_to_move || (resp.turn === 'black' ? 'BLACK' : 'WHITE')).toUpperCase();
         if (titleEl) titleEl.textContent = `${side} TO MOVE`;
         if (subEl) subEl.textContent = resp.is_check ? `Check! ${side} king in check.` : 'Pick up a piece (Yellow LED) to see legal moves (Cyan LEDs).';
+        if (resp.fen) {
+          this._updateWinProbability(resp.fen, resp.is_check, resp.is_game_over);
+        }
+        if (side === 'WHITE') {
+          // Human turn: clear guidance highlights after natural delay
+          setTimeout(() => {
+            this.boardUI.clearMoveArrow();
+            this.boardUI.clearMoveGuidance();
+          }, 1500);
+        }
         break;
 
       case 'MOVE_IN_PROGRESS':
@@ -350,43 +400,87 @@ class ChaturangaSimulatorApp {
         break;
 
       case 'ENGINE_THINKING':
-        if (titleEl) titleEl.textContent = '⚙ STOCKFISH THINKING...';
-        if (subEl) subEl.textContent = `Computing best response at Level ${this.skillLevel}... Please do not touch board.`;
+        if (titleEl) titleEl.textContent = '⚙ COMPUTER THINKING...';
+        if (subEl) subEl.textContent = `Calculating best response... Please do not touch board.`;
+        this.setAIMood('thinking', 'Calculating move...');
         break;
 
       case 'GUIDING_ENGINE_MOVE':
-        if (guidanceBox && resp.guidance) {
+        const guidance = resp.guidance;
+        this.lastGuidance = guidance;
+
+        if (guidanceBox && guidance) {
           guidanceBox.style.display = 'block';
           const stepTag = document.getElementById('guidance-step-tag');
           const stepInst = document.getElementById('guidance-instruction');
           const hintMagenta = document.getElementById('hint-magenta');
 
-          if (stepTag) stepTag.textContent = `STEP ${resp.guidance.step} OF ${resp.guidance.total_steps}`;
-          if (stepInst) stepInst.textContent = resp.guidance.instruction;
+          if (stepTag) stepTag.textContent = `STEP ${guidance.step} OF ${guidance.total_steps}`;
+          if (stepInst) stepInst.textContent = guidance.instruction;
           if (hintMagenta) {
-            hintMagenta.style.display = resp.guidance.instruction.toLowerCase().includes('remove') ? 'inline-flex' : 'none';
+            hintMagenta.style.display = guidance.instruction.toLowerCase().includes('remove') ? 'inline-flex' : 'none';
           }
         }
-        if (titleEl) titleEl.textContent = '🤖 FOLLOW ENGINE GUIDANCE';
-        if (subEl) subEl.textContent = resp.guidance ? resp.guidance.instruction : 'Follow LED cues to execute computer move.';
-        if (resp.leds) {
-          this.virtualESP32.setLEDCommand(resp.leds);
+
+        // Computer Move LED Guidance: Blinking pick-up piece, then blinking destination square
+        if (guidance) {
+          let fromSq = (guidance.from_square || '').toLowerCase();
+          let toSq = (guidance.to_square || '').toLowerCase();
+
+          if (!fromSq && guidance.instruction) {
+            const m = guidance.instruction.match(/on\s+([a-h][1-8])/i);
+            if (m) fromSq = m[1].toLowerCase();
+          }
+
+          // Ensure arrow animation is completely cleared per user instruction
+          this.boardUI.clearMoveArrow();
+
+          const isPieceInHand = guidance.in_hand || (fromSq && !this.boardUI.pieces[fromSq]);
+
+          if (isPieceInHand && toSq) {
+            // Step 2: Piece has been lifted from board -> BLINK destination square in GREEN!
+            this.boardUI.clearMoveGuidance();
+            this.boardUI.highlightMoveGuidance(null, toSq);
+            this.virtualLEDs.indicatePiecePickedUp(fromSq, toSq);
+            if (subEl) subEl.textContent = `Place piece on ${toSq.toUpperCase()} (Blinking Green LED)`;
+          } else if (fromSq) {
+            // Step 1: Piece is still on board -> BLINK piece to pick up in YELLOW!
+            this.boardUI.clearMoveGuidance();
+            this.boardUI.highlightMoveGuidance(fromSq, null);
+            this.virtualLEDs.indicateComputerMove(fromSq);
+            if (subEl) subEl.textContent = `Pick up piece on ${fromSq.toUpperCase()} (Blinking Yellow LED)`;
+          }
         }
+
+        if (titleEl) titleEl.textContent = 'COMPUTER MOVE READY';
         if (resp.oled_message) {
           this.virtualOLED.update({
             turn: 'BLACK',
-            lastMove: resp.guidance ? `MOVE: ${resp.guidance.instruction}` : resp.oled_message,
+            lastMove: guidance ? `MOVE: ${guidance.instruction}` : resp.oled_message,
             message: resp.oled_message
           });
+        }
+
+        this.setAIMood('confident', 'Follow LED cues to complete computer move.');
+
+        // Hands-Free Auto-Play Engine Move
+        if (this.autoPlayComputerMoves && guidance && !this._isAutoMoving) {
+          this._handleAutoEngineMove(guidance);
         }
         break;
 
       case 'RECOVERY':
+        const recoveryData = resp.recovery || {
+          reason: resp.reason || 'Board does not match expected game position.',
+          missing_squares: resp.offending_squares || [],
+          extra_squares: []
+        };
         if (recoveryBox) {
-          this._renderRecoveryDiff(resp.recovery || { reason: resp.reason || 'Board mismatch', missing_squares: resp.offending_squares || [], extra_squares: [] }, recoveryBox);
+          this._renderRecoveryDiff(recoveryData, recoveryBox);
         }
-        if (titleEl) titleEl.textContent = '🚨 ILLEGAL MOVE / RECOVERY';
-        if (subEl) subEl.textContent = resp.recovery ? resp.recovery.reason : 'Restore physical board to match LEDs.';
+        if (titleEl) titleEl.textContent = '⚠️ ILLEGAL MOVE / RECOVERY';
+        if (subEl) subEl.textContent = recoveryData.reason || 'Please restore board to match the LEDs.';
+        this.setAIMood('panic', recoveryData.reason || 'Board restore required.');
         break;
 
       case 'AWAITING_PROMOTION_CHOICE':
@@ -399,11 +493,17 @@ class ChaturangaSimulatorApp {
         const reason = resp.game_over ? `${resp.game_over.reason} (${resp.game_over.result})` : 'Game Over';
         if (titleEl) titleEl.textContent = '🏆 GAME OVER';
         if (subEl) subEl.textContent = reason;
+        if (resp.fen) {
+          this._updateWinProbability(resp.fen, resp.is_check, true, resp.game_over?.result);
+        }
         break;
 
       default:
         if (titleEl) titleEl.textContent = (resp.status || 'READY').toUpperCase();
         if (subEl) subEl.textContent = resp.oled_message || '';
+        if (resp.fen) {
+          this._updateWinProbability(resp.fen, resp.is_check);
+        }
         break;
     }
   }
@@ -583,6 +683,396 @@ class ChaturangaSimulatorApp {
         `Authoritative Backend: http://127.0.0.1:5000`
       );
     });
+
+    // 11. Auto-Play Computer Moves Toggle
+    const chkAutoMove = document.getElementById('chk-auto-engine-move');
+    chkAutoMove?.addEventListener('change', (e) => {
+      this.autoPlayComputerMoves = e.target.checked;
+    });
+
+    // 12. Restore Legal Board Position Buttons (Toolbar + Recovery Box)
+    const btnRestore = document.getElementById('btn-restore-board');
+    btnRestore?.addEventListener('click', () => {
+      this._restoreLegalBoard();
+    });
+
+    const btnRecoveryFix = document.getElementById('btn-recovery-auto-fix');
+    btnRecoveryFix?.addEventListener('click', () => {
+      this._restoreLegalBoard();
+    });
+  }
+
+  // ============================================================
+  // View Switcher (Player Mode vs Hardware Lab Mode)
+  // ============================================================
+  _initViewMode() {
+    const btnPlayer = document.getElementById('btn-view-player');
+    const btnLab = document.getElementById('btn-view-lab');
+    if (!btnPlayer || !btnLab) return;
+
+    // Default: Player Mode for clean, focused game experience
+    document.body.classList.add('player-view');
+    document.body.classList.remove('lab-view');
+
+    btnPlayer.addEventListener('click', () => {
+      this.currentView = 'player';
+      btnPlayer.classList.add('active');
+      btnLab.classList.remove('active');
+      document.body.classList.add('player-view');
+      document.body.classList.remove('lab-view');
+    });
+
+    btnLab.addEventListener('click', () => {
+      this.currentView = 'lab';
+      btnLab.classList.add('active');
+      btnPlayer.classList.remove('active');
+      document.body.classList.remove('player-view');
+      document.body.classList.add('lab-view');
+    });
+  }
+
+  // ============================================================
+  // Win Probability / Evaluation Bar Calculation
+  // ============================================================
+  _updateWinProbability(fen, isCheck = false, isGameOver = false, result = null) {
+    const blackBar = document.getElementById('eval-bar-black');
+    const whiteBar = document.getElementById('eval-bar-white');
+    const scoreTag = document.getElementById('eval-score-tag');
+    if (!blackBar || !whiteBar || !scoreTag) return;
+
+    if (isGameOver) {
+      if (result && result.includes('1-0')) {
+        whiteBar.style.height = '100%';
+        blackBar.style.height = '0%';
+        scoreTag.style.top = '10%';
+        scoreTag.textContent = '1-0';
+        this.setAIMood('panic', 'You won! Beautiful victory.');
+        return;
+      } else if (result && result.includes('0-1')) {
+        whiteBar.style.height = '0%';
+        blackBar.style.height = '100%';
+        scoreTag.style.top = '90%';
+        scoreTag.textContent = '0-1';
+        this.setAIMood('happy', 'Checkmate! Good game.');
+        return;
+      } else {
+        whiteBar.style.height = '50%';
+        blackBar.style.height = '50%';
+        scoreTag.style.top = '50%';
+        scoreTag.textContent = '1/2';
+        this.setAIMood('neutral', 'The game concluded in a draw.');
+        return;
+      }
+    }
+
+    if (!fen) fen = HARDWARE_CONFIG.STARTING_FEN;
+    const pos = fen.split(' ')[0];
+
+    // Piece values
+    const PIECE_VALS = {
+      'P': 1.0, 'N': 3.1, 'B': 3.25, 'R': 5.0, 'Q': 9.5, 'K': 0.0,
+      'p': -1.0, 'n': -3.1, 'b': -3.25, 'r': -5.0, 'q': -9.5, 'k': -0.0
+    };
+
+    let score = 0.0;
+    const rows = pos.split('/');
+    for (let r = 0; r < 8; r++) {
+      let f = 0;
+      for (const ch of rows[r]) {
+        if (!isNaN(parseInt(ch, 10))) {
+          f += parseInt(ch, 10);
+        } else {
+          score += (PIECE_VALS[ch] || 0.0);
+          // Small center square positional evaluation
+          if ((r === 3 || r === 4) && (f === 3 || f === 4)) {
+            score += (ch === ch.toUpperCase() ? 0.25 : -0.25);
+          }
+          f++;
+        }
+      }
+    }
+
+    if (isCheck) {
+      const turn = fen.split(' ')[1];
+      score += (turn === 'w' ? -0.7 : 0.7);
+    }
+
+    this.lastEvalScore = score;
+    const cp = score * 100;
+    // Win probability formula: P(White) = 1 / (1 + 10^(-cp / 400))
+    let pWhite = 1 / (1 + Math.pow(10, -cp / 400)) * 100;
+    pWhite = Math.max(3, Math.min(97, pWhite));
+
+    whiteBar.style.height = `${pWhite}%`;
+    blackBar.style.height = `${100 - pWhite}%`;
+    scoreTag.style.top = `${100 - pWhite}%`;
+
+    const formattedScore = score >= 0 ? `+${score.toFixed(1)}` : score.toFixed(1);
+    scoreTag.textContent = formattedScore;
+
+    // AI Avatar reaction based on evaluation score & turn
+    if (this.gameMode === 'vs_engine') {
+      const botColor = this.humanColor === 'white' ? 'black' : 'white';
+      const botAdvantage = (botColor === 'black' ? -score : score);
+
+      if (isCheck) {
+        if (botAdvantage < -1.0) {
+          this.setAIMood('panic', 'Check! My king is under heavy fire!');
+        } else {
+          this.setAIMood('happy', 'Check! Watch your defenses!');
+        }
+      } else if (botAdvantage > 2.0) {
+        this.setAIMood('happy', 'My position is dominating. Checkmate is on the horizon.');
+      } else if (botAdvantage > 0.8) {
+        this.setAIMood('confident', 'A solid positional advantage. Your options are shrinking.');
+      } else if (botAdvantage < -2.0) {
+        this.setAIMood('panic', 'Incredible tactical blow! My evaluations are dropping rapidly.');
+      } else if (botAdvantage < -0.8) {
+        this.setAIMood('worried', 'You found a great move. I need to be careful here.');
+      } else {
+        this.setAIMood('neutral', 'A balanced contest. Let us see who blunders first.');
+      }
+    }
+  }
+
+  // ============================================================
+  // AI Bot Persona: Facial Expressions & Speech Bubble
+  // ============================================================
+  setAIMood(mood, quote) {
+    const card = document.getElementById('ai-persona-card');
+    const badge = document.getElementById('ai-mood-badge');
+    const bubble = document.getElementById('ai-speech-bubble');
+    const mouth = document.getElementById('ai-mouth');
+    const browL = document.getElementById('eyebrow-left');
+    const browR = document.getElementById('eyebrow-right');
+    const accent = document.getElementById('emotion-accent');
+
+    const statusBlack = document.getElementById('status-player-black');
+    if (statusBlack) {
+      if (mood === 'thinking') {
+        statusBlack.textContent = 'Thinking...';
+      } else if (mood === 'panic') {
+        statusBlack.textContent = 'Check!';
+      } else {
+        statusBlack.textContent = `Stockfish (Lvl ${this.skillLevel})`;
+      }
+    }
+
+    if (!card) return;
+
+    card.classList.remove('mood-thinking', 'mood-confident', 'mood-happy', 'mood-worried', 'mood-panic');
+    if (mood !== 'neutral') card.classList.add(`mood-${mood}`);
+
+    if (bubble && quote) bubble.textContent = `"${quote}"`;
+
+    if (badge) {
+      const labels = {
+        'thinking': 'Calculating...',
+        'confident': 'Confident',
+        'happy': 'Victorious',
+        'worried': 'Worried',
+        'panic': 'Panicked!',
+        'neutral': 'Focused'
+      };
+      badge.textContent = labels[mood] || 'Focused';
+    }
+
+    if (accent) {
+      if (mood === 'panic') {
+        accent.style.display = 'block';
+        accent.setAttribute('fill', '#ff4757');
+      } else if (mood === 'worried') {
+        accent.style.display = 'block';
+        accent.setAttribute('fill', '#38e1ff');
+      } else {
+        accent.style.display = 'none';
+      }
+    }
+
+    if (mouth) {
+      switch (mood) {
+        case 'happy':
+          mouth.setAttribute('d', 'M 35 62 Q 50 78 65 62');
+          break;
+        case 'confident':
+          mouth.setAttribute('d', 'M 35 64 Q 50 72 65 64');
+          break;
+        case 'worried':
+          mouth.setAttribute('d', 'M 35 68 Q 50 62 65 68');
+          break;
+        case 'panic':
+          mouth.setAttribute('d', 'M 42 66 Q 50 58 58 66 Q 50 74 42 66');
+          break;
+        case 'thinking':
+          mouth.setAttribute('d', 'M 38 66 L 62 66');
+          break;
+        default:
+          mouth.setAttribute('d', 'M 35 66 Q 50 68 65 66');
+      }
+    }
+
+    if (browL && browR) {
+      switch (mood) {
+        case 'confident':
+          browL.setAttribute('y1', '33'); browL.setAttribute('y2', '28');
+          browR.setAttribute('y1', '28'); browR.setAttribute('y2', '33');
+          break;
+        case 'worried':
+          browL.setAttribute('y1', '26'); browL.setAttribute('y2', '30');
+          browR.setAttribute('y1', '30'); browR.setAttribute('y2', '26');
+          break;
+        case 'panic':
+          browL.setAttribute('y1', '24'); browL.setAttribute('y2', '28');
+          browR.setAttribute('y1', '28'); browR.setAttribute('y2', '24');
+          break;
+        case 'thinking':
+          browL.setAttribute('y1', '29'); browL.setAttribute('y2', '32');
+          browR.setAttribute('y1', '32'); browR.setAttribute('y2', '29');
+          break;
+        default:
+          browL.setAttribute('y1', '31'); browL.setAttribute('y2', '31');
+          browR.setAttribute('y1', '31'); browR.setAttribute('y2', '31');
+      }
+    }
+  }
+
+  // ============================================================
+  // Hands-Free Auto Engine Move Execution
+  // ============================================================
+  async _handleAutoEngineMove(guidance) {
+    if (this._isAutoMoving) return;
+    this._isAutoMoving = true;
+
+    try {
+      let fromSq = (guidance.from_square || '').toLowerCase();
+      let toSq = (guidance.to_square || '').toLowerCase();
+
+      if (!fromSq && guidance.instruction) {
+        const m = guidance.instruction.match(/on\s+([a-h][1-8])/i);
+        if (m) fromSq = m[1].toLowerCase();
+      }
+
+      if (!fromSq) return;
+
+      const subEl = document.getElementById('phase-banner-sub');
+      const stepInst = document.getElementById('guidance-instruction');
+
+      // Stage 1: Blink source square in Yellow
+      this.boardUI.clearMoveGuidance();
+      this.boardUI.clearMoveArrow();
+      this.virtualLEDs.clearAll();
+      this.boardUI.highlightMoveGuidance(fromSq, null);
+      this.virtualLEDs.indicateComputerMove(fromSq);
+      if (subEl) subEl.textContent = `Pick up piece on ${fromSq.toUpperCase()} (Blinking Yellow LED)`;
+      if (stepInst) stepInst.textContent = `Pick up piece on ${fromSq.toUpperCase()} (Blinking Yellow LED)`;
+
+      // Visible pause so the user clearly sees the pick-up square blinking in yellow
+      await new Promise(r => setTimeout(r, 900));
+
+      if (guidance.step === 1 && guidance.total_steps === 2 && !toSq) {
+        // Step 1 of capture or en-passant: remove victim piece
+        const victim = this.boardUI.pieces[fromSq];
+        if (victim) {
+          delete this.boardUI.pieces[fromSq];
+          this.sensorMatrix.setPhysicalPresence(fromSq, false);
+          this.boardUI.renderPieces();
+          this.boardUI.updateSensorIndicators();
+          this.boardUI.updateCapturedPieces();
+        }
+        const diff = { lifted: [fromSq], placed: [], changedCount: 1 };
+        await this.virtualESP32._transmitSensorEvent(diff, this.sensorMatrix.toBigInt());
+      } else if (fromSq && toSq) {
+        // Pick up the moving piece from source
+        const movingPiece = this.boardUI.pieces[fromSq];
+        if (movingPiece) {
+          delete this.boardUI.pieces[fromSq];
+          this.sensorMatrix.setPhysicalPresence(fromSq, false);
+          this.boardUI.renderPieces();
+          this.boardUI.updateSensorIndicators();
+        }
+
+        // Stage 2: Blink destination square in Green
+        this.boardUI.clearMoveGuidance();
+        this.boardUI.highlightMoveGuidance(null, toSq);
+        this.virtualLEDs.indicatePiecePickedUp(fromSq, toSq);
+        if (subEl) subEl.textContent = `Place piece on ${toSq.toUpperCase()} (Blinking Green LED)`;
+        if (stepInst) stepInst.textContent = `Place piece on ${toSq.toUpperCase()} (Blinking Green LED)`;
+
+        // Visible pause so the user clearly sees the destination square blinking in green
+        await new Promise(r => setTimeout(r, 900));
+
+        // Place piece onto destination
+        if (movingPiece) {
+          this.boardUI.pieces[toSq] = movingPiece;
+          this.sensorMatrix.setPhysicalPresence(toSq, true);
+          this.boardUI.renderPieces();
+          this.boardUI.updateSensorIndicators();
+          this.boardUI.updateCapturedPieces();
+        }
+
+        const diff = { lifted: [fromSq], placed: [toSq], changedCount: 2 };
+        await this.virtualESP32._transmitSensorEvent(diff, this.sensorMatrix.toBigInt());
+      }
+    } catch (e) {
+      console.warn('Auto move execution error:', e);
+    } finally {
+      this._isAutoMoving = false;
+    }
+  }
+
+  // ============================================================
+  // Restore Legal Board Position (One-Click Error & Capture Fix)
+  // ============================================================
+  async _restoreLegalBoard() {
+    try {
+      let targetFen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+      try {
+        const state = await this.apiService.getGameState();
+        if (state && state.fen) {
+          targetFen = state.fen;
+        }
+      } catch (e) {
+        console.warn('Could not fetch authoritative state, using local FEN:', e);
+        if (this.apiService.mockBackend) {
+          targetFen = this.apiService.mockBackend.generateFEN();
+        }
+      }
+
+      this.boardUI.syncFromFEN(targetFen);
+
+      // Re-align physical sensors with restored pieces
+      const { SQUARES } = await import('./config.js');
+      const { SensorMatrix } = await import('./modules/sensorMatrix.js');
+
+      for (const sq of SQUARES) {
+        const hasPiece = !!this.boardUI.pieces[sq];
+        this.sensorMatrix.setPhysicalPresence(sq, hasPiece);
+      }
+
+      this.boardUI.updateSensorIndicators();
+      this.virtualLEDs.clearAll();
+      this.virtualESP32.clearLEDCommand();
+      this._updateBitmapDisplay();
+
+      // Transmit settled sensor state to backend so backend exits recovery mode!
+      const currentBigInt = this.sensorMatrix.toBigInt();
+      const prevStable = this.virtualESP32.lastStableBigInt || currentBigInt;
+      const diff = SensorMatrix.computeDiff(prevStable, currentBigInt);
+      this.virtualESP32.lastStableBigInt = currentBigInt;
+      this.virtualESP32.lastCandidateBigInt = currentBigInt;
+      await this.virtualESP32._transmitSensorEvent(diff, currentBigInt);
+
+      const recBox = document.getElementById('recovery-box');
+      if (recBox) recBox.style.display = 'none';
+
+      const titleEl = document.getElementById('phase-banner-title');
+      const subEl = document.getElementById('phase-banner-sub');
+      if (titleEl) titleEl.textContent = 'BOARD RESTORED';
+      if (subEl) subEl.textContent = 'Physical pieces and sensors restored to legal position.';
+      this.setAIMood('neutral', 'Board synchronized to official game state.');
+    } catch (e) {
+      console.error('Failed to restore legal board:', e);
+    }
   }
 
   // ============================================================
@@ -623,8 +1113,9 @@ class ChaturangaSimulatorApp {
   async _refreshMoveHistory() {
     try {
       const state = await this.apiService.getGameState();
-      if (state && state.move_history) {
-        this._renderLiveMoveHistory(state.move_history);
+      const moves = state?.move_history || state?.history;
+      if (moves) {
+        this._renderLiveMoveHistory(moves);
       }
     } catch (e) {
       console.warn('Could not refresh move history:', e);
@@ -635,9 +1126,17 @@ class ChaturangaSimulatorApp {
     try {
       const pgnData = await this.apiService.getPGN();
       let pgn = pgnData?.pgn || '';
+
+      if (!pgn || pgn.trim() === '' || pgn.trim() === '*') {
+        if (this.apiService.mockBackend) {
+          pgn = this.apiService.mockBackend.getPGN();
+        }
+      }
+
       if (!pgn || pgn.trim() === '') {
-        alert('No moves played yet in the current game to export.');
-        return;
+        const now = new Date();
+        const dateStr = `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
+        pgn = `[Event "CHĀTURANGA Game"]\n[Site "Physical Electronic Chessboard"]\n[Date "${dateStr}"]\n[Round "1"]\n[White "Human"]\n[Black "Computer"]\n[Result "*"]\n\n*`;
       }
 
       const blob = new Blob([pgn], { type: 'application/x-chess-pgn;charset=utf-8' });

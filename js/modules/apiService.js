@@ -117,7 +117,12 @@ export class ApiService {
         body: JSON.stringify(scanPayload)
       });
       const durationMs = Math.round(performance.now() - startTime);
-      const data = await response.json();
+      let data = {};
+      try {
+        data = await response.json();
+      } catch (e) {
+        data = { status: response.ok ? 'accepted' : 'error' };
+      }
 
       this._notifyTraffic({
         ...requestInfo,
@@ -127,7 +132,12 @@ export class ApiService {
         response: data
       });
 
-      if (!response.ok && !data.status) {
+      // Valid chess responses (recovery, rejected, warning, intermediate, idle, accepted)
+      if (data && (data.status || data.recovery || data.reason)) {
+        return data;
+      }
+
+      if (!response.ok) {
         throw new Error(data.error || `HTTP error ${response.status}`);
       }
       return data;
@@ -382,19 +392,32 @@ export class ApiService {
    * Get official PGN export
    */
   async getPGN() {
+    if (this.mode === 'MOCK') {
+      const pgn = this.mockBackend ? this.mockBackend.getPGN() : '';
+      return { pgn, status: 'ok' };
+    }
+
     const endpoint = '/api/v1/game/pgn';
     try {
       const res = await fetch(`${this.baseUrl}${endpoint}`);
-      const text = await res.text();
-      try {
-        const json = JSON.parse(text);
-        return { pgn: json.pgn || text };
-      } catch (e) {
-        return { pgn: text };
+      if (res.ok) {
+        const text = await res.text();
+        try {
+          const json = JSON.parse(text);
+          return { pgn: json.pgn || text, status: 'ok' };
+        } catch (e) {
+          return { pgn: text, status: 'ok' };
+        }
       }
     } catch (e) {
-      return { pgn: '' };
+      console.warn('Backend PGN fetch failed, falling back to local history:', e);
     }
+
+    // Fallback to internal generator if backend offline
+    if (this.mockBackend) {
+      return { pgn: this.mockBackend.getPGN(), status: 'fallback' };
+    }
+    return { pgn: '', status: 'empty' };
   }
 
   _sleep(ms) {

@@ -30,6 +30,12 @@
       </div>
     </div>
 
+    <!-- View Mode Switcher: Player Game View vs Hardware Lab View -->
+    <div class="view-mode-toggle-group">
+      <button class="view-toggle-btn active" id="btn-view-player" title="Player Experience: Bot Avatar, Win Bar, Auto-Move">🎮 PLAYER VIEW</button>
+      <button class="view-toggle-btn" id="btn-view-lab" title="Hardware Lab: ESP32 PCB, 64-bit Hex Bitmaps, OLED, Debounce Sliders">🔬 HARDWARE LAB</button>
+    </div>
+
     <div class="header-status-group">
       <div class="status-pill pill-engine-online" id="stockfish-engine-badge" title="Stockfish 18 Engine Status: Click for details">
         <span class="engine-pulse-dot"></span>
@@ -43,7 +49,7 @@
   <!-- Main Workspace -->
   <main class="workspace-container">
 
-    <!-- Column 1: Physical Chessboard & Sensor Overlay -->
+    <!-- Column 1: Physical Chessboard, Evaluation Bar & Sensor Overlay -->
     <section class="card-panel column-board" aria-labelledby="heading-board">
       <div class="panel-header">
         <h2 class="panel-title" id="heading-board">
@@ -57,21 +63,46 @@
         <span>⚠ SENSOR DEBUG ACTIVE: Click any square to toggle reed switch (0/1)</span>
       </div>
 
-      <!-- Chessboard Grid Frame -->
-      <div class="chessboard-wrapper">
-        <div class="board-bezel-frame">
-          <div id="board-grid" class="chessboard-grid show-sensor-overlay"></div>
+      <!-- Chessboard & Live Win Probability Evaluation Bar -->
+      <div class="board-and-eval-flex">
+        <!-- Stockfish Live Win Probability Bar -->
+        <div class="eval-bar-container" id="eval-bar-container" title="Stockfish Win Probability Bar (White vs Black)">
+          <div class="eval-bar-track">
+            <div class="eval-bar-black" id="eval-bar-black" style="height: 50%;"></div>
+            <div class="eval-bar-white" id="eval-bar-white" style="height: 50%;"></div>
+          </div>
+          <div class="eval-score-tag" id="eval-score-tag">50%</div>
+        </div>
+
+        <!-- Chessboard Grid Frame with On-Board Move Arrows Layer -->
+        <div class="chessboard-wrapper">
+          <div class="board-bezel-frame">
+            <div id="board-grid" class="chessboard-grid show-sensor-overlay"></div>
+            <!-- Visual Directional Move Arrow Layer -->
+            <svg id="board-arrows-svg" class="board-arrows-layer" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="arrowGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#ffd21f" stop-opacity="0.9" />
+                  <stop offset="100%" stop-color="#2ecc71" stop-opacity="0.95" />
+                </linearGradient>
+                <marker id="arrowhead" markerWidth="6" markerHeight="6" refX="4" refY="3" orient="auto">
+                  <polygon points="0 0, 6 3, 0 6" fill="#2ecc71" />
+                </marker>
+              </defs>
+              <g id="arrow-path-group"></g>
+            </svg>
+          </div>
         </div>
       </div>
 
       <!-- Off-Board Captured Pieces Trays -->
       <div class="captured-trays-wrapper">
-        <div class="captured-tray" id="tray-white-captured" title="White Captured Pieces (Drag back to board to recover)">
-          <span class="captured-tray-label">White Captured:</span>
+        <div class="captured-tray" id="tray-white-captured" title="Pieces captured by White (Black casualties)">
+          <span class="captured-tray-label">Captured by White:</span>
           <div class="captured-pieces-list"></div>
         </div>
-        <div class="captured-tray" id="tray-black-captured" title="Black Captured Pieces (Drag back to board to recover)">
-          <span class="captured-tray-label">Black Captured:</span>
+        <div class="captured-tray" id="tray-black-captured" title="Pieces captured by Black (White casualties)">
+          <span class="captured-tray-label">Captured by Black:</span>
           <div class="captured-pieces-list"></div>
         </div>
       </div>
@@ -80,10 +111,22 @@
       <div class="controls-grid" style="margin-top: 14px;">
         <label class="switch-label">
           <span class="custom-switch">
+            <input type="checkbox" id="chk-auto-engine-move" checked>
+            <span class="slider-round"></span>
+          </span>
+          <span title="Automatically animate and execute computer moves on the board">Auto-Play Computer Moves</span>
+        </label>
+
+        <button id="btn-restore-board" class="btn" style="padding: 4px 10px; font-size: 0.75rem;" title="Reset all pieces on board to match official legal game position">
+          <span class="icon">↺</span> Restore Legal Board
+        </button>
+
+        <label class="switch-label">
+          <span class="custom-switch">
             <input type="checkbox" id="chk-sensor-overlay" checked>
             <span class="slider-round"></span>
           </span>
-          <span>Show Sensor Badges</span>
+          <span>Sensors (0/1)</span>
         </label>
 
         <label class="switch-label">
@@ -91,7 +134,7 @@
             <input type="checkbox" id="chk-sensor-debug">
             <span class="slider-round"></span>
           </span>
-          <span>Sensor Debug Override</span>
+          <span>Debug Override</span>
         </label>
       </div>
     </section>
@@ -171,6 +214,30 @@
         <div class="panel-subtitle">Authoritative Rules &amp; Engine</div>
       </div>
 
+      <!-- Clean Match Status & Active Players Card -->
+      <div class="match-status-card" id="match-status-card">
+        <div class="match-players-row">
+          <div class="player-box player-white active-player" id="card-player-white">
+            <span class="player-piece-icon">♔</span>
+            <div class="player-details">
+              <span class="player-name" id="name-player-white">White (Human)</span>
+              <span class="player-status-tag" id="status-player-white">To Move</span>
+            </div>
+          </div>
+          <div class="vs-divider">VS</div>
+          <div class="player-box player-black" id="card-player-black">
+            <span class="player-piece-icon">♚</span>
+            <div class="player-details">
+              <span class="player-name" id="name-player-black">Computer</span>
+              <span class="player-status-tag" id="status-player-black">Stockfish (Lvl 5)</span>
+            </div>
+          </div>
+        </div>
+        <!-- Hidden elements for backward compatibility -->
+        <span id="ai-mood-badge" style="display:none;">Ready</span>
+        <span id="ai-speech-bubble" style="display:none;"></span>
+      </div>
+
       <!-- Phase 3 Mode Switcher -->
       <div class="mode-segmented-bar">
         <button class="mode-tab-btn active" id="btn-mode-computer" data-mode="vs_engine">
@@ -211,6 +278,9 @@
         </div>
         <div style="font-size: 0.8rem; color: #e6edf3;" id="recovery-reason">Physical board does not match expected position.</div>
         <div class="recovery-diff-list" id="recovery-diff-list"></div>
+        <button id="btn-recovery-auto-fix" class="btn btn-primary" style="margin-top: 10px; width: 100%; font-size: 0.78rem;" title="Reset virtual board to match expected state">
+          ↺ Auto-Restore Board to Match LEDs
+        </button>
       </div>
 
       <!-- Match Settings (VS Computer / Two Player) -->

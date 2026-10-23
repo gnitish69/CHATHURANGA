@@ -113,6 +113,44 @@ body {
   gap: 16px;
 }
 
+/* View Mode Switcher in Header */
+.view-mode-toggle-group {
+  display: flex;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 3px;
+  border-radius: 24px;
+  border: 1px solid var(--border-subtle);
+  gap: 4px;
+}
+
+.view-toggle-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  font-weight: 700;
+  padding: 5px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.view-toggle-btn.active {
+  background: linear-gradient(135deg, var(--accent-cyan), #1b62cc);
+  color: #0b0f17;
+  font-weight: 800;
+  box-shadow: 0 0 12px var(--accent-cyan-glow);
+}
+
+.view-toggle-btn:hover:not(.active) {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+}
+
 .status-pill {
   font-family: var(--font-mono);
   font-size: 0.72rem;
@@ -139,13 +177,24 @@ body {
 /* Main Workspace Grid */
 .workspace-container {
   display: grid;
-  grid-template-columns: minmax(460px, 580px) minmax(320px, 390px) 1fr;
+  grid-template-columns: minmax(480px, 600px) minmax(320px, 390px) 1fr;
   gap: 20px;
   padding: 20px 24px;
   flex: 1;
   max-width: 1720px;
   margin: 0 auto;
   width: 100%;
+  transition: all 0.3s ease;
+}
+
+/* Player View vs Hardware Lab View */
+body.player-view .column-hardware {
+  display: none !important;
+}
+
+body.player-view .workspace-container {
+  grid-template-columns: minmax(520px, 640px) 1fr;
+  max-width: 1400px;
 }
 
 @media (max-width: 1400px) {

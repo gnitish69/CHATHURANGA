@@ -109,6 +109,7 @@ class GameSession:
                 "status_message": self.status_message,
                 "move_count": len(self.move_history),
                 "history": list(self.move_history),
+                "move_history": list(self.move_history),
                 "guidance": self._get_current_guidance_info(),
                 "recovery": self._get_recovery_info(),
                 "leds": self._get_current_leds(),
@@ -347,7 +348,8 @@ class GameSession:
             }
 
         # D. Otherwise -> Illegal Move / Mismatch -> Enter RECOVERY
-        return self._enter_recovery(official_occ, curr_occupancy, "Illegal move or board mismatch.")
+        reason = self._diagnose_illegal_move(curr_occupancy, diff)
+        return self._enter_recovery(official_occ, curr_occupancy, reason)
 
     def _is_plausible_in_progress(self, curr_occupancy, diff):
         official_occ = board_to_occupancy(self.board)
@@ -539,7 +541,7 @@ class GameSession:
         }
 
     def _generate_engine_guidance(self, move):
-        """Generate 1-step or 2-step physical guidance for engine's move."""
+        """Generate 1-step or 2-step physical guidance for engine's move with blinking LEDs."""
         from_sq = move.from_square
         to_sq = move.to_square
         from_name = chess.square_name(from_sq)
@@ -559,13 +561,15 @@ class GameSession:
             steps.append({
                 "step": 1,
                 "total_steps": 2,
-                "instruction": f"Remove captured pawn on {victim_name.upper()}",
+                "instruction": f"Remove captured piece on {victim_name.upper()} (Blinking LED)",
                 "start_occupancy": official_occ,
                 "in_hand_occupancy": None,
                 "expected_occupancy": occ_after_step1,
                 "from_square": victim_name,
                 "to_square": None,
-                "leds": {victim_name: {"color": "MAGENTA", "mode": "SOLID"}},
+                "leds": {victim_name: {"color": "MAGENTA", "mode": "FLASH"}},
+                "pickup_leds": {victim_name: {"color": "MAGENTA", "mode": "FLASH"}},
+                "place_leds": {},
                 "oled": f"REMOVE: {victim_name.upper()}"
             })
             # Step 2: Move attacking pawn
@@ -573,13 +577,15 @@ class GameSession:
             steps.append({
                 "step": 2,
                 "total_steps": 2,
-                "instruction": f"Move pawn {from_name.upper()} to {to_name.upper()}",
+                "instruction": f"Pick up pawn on {from_name.upper()} (Blinking Yellow LED)",
                 "start_occupancy": occ_after_step1,
                 "in_hand_occupancy": occ_after_step1 ^ square_to_bit(from_sq),
                 "expected_occupancy": occ_after_step2,
                 "from_square": from_name,
                 "to_square": to_name,
                 "leds": {from_name: "YELLOW", to_name: "GREEN"},
+                "pickup_leds": {from_name: {"color": "YELLOW", "mode": "FLASH"}},
+                "place_leds": {to_name: {"color": "GREEN", "mode": "FLASH"}},
                 "oled": f"MOVE: {from_name}->{to_name}"
             })
 
@@ -591,13 +597,15 @@ class GameSession:
             steps.append({
                 "step": 1,
                 "total_steps": 2,
-                "instruction": f"Move King {from_name.upper()} to {to_name.upper()}",
+                "instruction": f"Pick up King on {from_name.upper()} (Blinking Yellow LED)",
                 "start_occupancy": official_occ,
                 "in_hand_occupancy": official_occ ^ k_from_bit,
                 "expected_occupancy": occ_after_step1,
                 "from_square": from_name,
                 "to_square": to_name,
                 "leds": {from_name: "YELLOW", to_name: "GREEN"},
+                "pickup_leds": {from_name: {"color": "YELLOW", "mode": "FLASH"}},
+                "place_leds": {to_name: {"color": "GREEN", "mode": "FLASH"}},
                 "oled": f"KING: {from_name}->{to_name}"
             })
             # Step 2: Move Rook
@@ -613,13 +621,15 @@ class GameSession:
             steps.append({
                 "step": 2,
                 "total_steps": 2,
-                "instruction": f"Move Rook {r_from.upper()} to {r_to.upper()}",
+                "instruction": f"Pick up Rook on {r_from.upper()} (Blinking Yellow LED)",
                 "start_occupancy": occ_after_step1,
                 "in_hand_occupancy": occ_after_step1 ^ rf_bit,
                 "expected_occupancy": occ_after_step2,
                 "from_square": r_from,
                 "to_square": r_to,
                 "leds": {r_from: "YELLOW", r_to: "GREEN"},
+                "pickup_leds": {r_from: {"color": "YELLOW", "mode": "FLASH"}},
+                "place_leds": {r_to: {"color": "GREEN", "mode": "FLASH"}},
                 "oled": f"ROOK: {r_from}->{r_to}"
             })
 
@@ -629,13 +639,15 @@ class GameSession:
             steps.append({
                 "step": 1,
                 "total_steps": 2,
-                "instruction": f"Remove captured piece on {to_name.upper()}",
+                "instruction": f"Remove captured piece on {to_name.upper()} (Blinking LED)",
                 "start_occupancy": official_occ,
                 "in_hand_occupancy": None,
                 "expected_occupancy": occ_after_step1,
                 "from_square": to_name,
                 "to_square": None,
-                "leds": {to_name: {"color": "MAGENTA", "mode": "SOLID"}},
+                "leds": {to_name: {"color": "MAGENTA", "mode": "FLASH"}},
+                "pickup_leds": {to_name: {"color": "MAGENTA", "mode": "FLASH"}},
+                "place_leds": {},
                 "oled": f"REMOVE: {to_name.upper()}"
             })
             # Step 2: Move capturing piece
@@ -643,13 +655,15 @@ class GameSession:
             steps.append({
                 "step": 2,
                 "total_steps": 2,
-                "instruction": f"Place {from_name.upper()} piece onto {to_name.upper()}",
+                "instruction": f"Pick up piece on {from_name.upper()} (Blinking Yellow LED)",
                 "start_occupancy": occ_after_step1,
                 "in_hand_occupancy": occ_after_step1 ^ square_to_bit(from_sq),
                 "expected_occupancy": occ_after_step2,
                 "from_square": from_name,
                 "to_square": to_name,
                 "leds": {from_name: "YELLOW", to_name: "GREEN"},
+                "pickup_leds": {from_name: {"color": "YELLOW", "mode": "FLASH"}},
+                "place_leds": {to_name: {"color": "GREEN", "mode": "FLASH"}},
                 "oled": f"PLACE: {from_name}->{to_name}"
             })
 
@@ -659,13 +673,15 @@ class GameSession:
             steps.append({
                 "step": 1,
                 "total_steps": 1,
-                "instruction": f"Move piece from {from_name.upper()} to {to_name.upper()}",
+                "instruction": f"Pick up piece on {from_name.upper()} (Blinking Yellow LED)",
                 "start_occupancy": official_occ,
                 "in_hand_occupancy": official_occ ^ square_to_bit(from_sq),
                 "expected_occupancy": occ_after_move,
                 "from_square": from_name,
                 "to_square": to_name,
                 "leds": {from_name: "YELLOW", to_name: "GREEN"},
+                "pickup_leds": {from_name: {"color": "YELLOW", "mode": "FLASH"}},
+                "place_leds": {to_name: {"color": "GREEN", "mode": "FLASH"}},
                 "oled": f"MOVE: {from_name}->{to_name}"
             })
 
@@ -716,16 +732,26 @@ class GameSession:
                 "fen": self.board.fen()
             }
 
-        # 3. Piece lifted from origin square and currently in hand
+        # 3. Piece lifted from origin square and currently in hand -> Blink destination!
         if in_hand_occ is not None and curr_occupancy == in_hand_occ:
             dest_sq = current_step.get("to_square")
-            in_hand_leds = {dest_sq: "GREEN"} if dest_sq else current_step["leds"]
+            in_hand_leds = current_step.get("in_hand_leds") or ({dest_sq: {"color": "GREEN", "mode": "FLASH"}} if dest_sq else current_step["leds"])
+            inst_text = f"Place piece onto {dest_sq.upper()} (Blinking Green LED)" if dest_sq else current_step["instruction"]
             oled_msg = f"PLACE ON {dest_sq.upper()}" if dest_sq else current_step["oled"]
             return {
                 "status": "intermediate",
                 "phase": "GUIDING_ENGINE_MOVE",
                 "mode": self.mode,
-                "guidance": self._get_current_guidance_info(),
+                "guidance": {
+                    "step": current_step["step"],
+                    "total_steps": current_step["total_steps"],
+                    "instruction": inst_text,
+                    "from_square": current_step.get("from_square"),
+                    "to_square": dest_sq,
+                    "in_hand": True,
+                    "leds": in_hand_leds,
+                    "oled": oled_msg
+                },
                 "leds": in_hand_leds,
                 "oled_message": oled_msg,
                 "fen": self.board.fen()
@@ -733,6 +759,98 @@ class GameSession:
 
         # 4. Human placed or lifted an incorrect square -> Enter RECOVERY
         return self._enter_recovery(target_occ, curr_occupancy, f"Deviation from guidance: {current_step['instruction']}")
+
+    def _diagnose_illegal_move(self, curr_occupancy, diff=None):
+        """Generates detailed, user-friendly explanations of chess rule violations and board mismatches."""
+        official_occ = board_to_occupancy(self.board)
+        missing, extra = self._compute_bitmap_diff(official_occ, curr_occupancy)
+        turn_name = self._turn_name()
+
+        # Case 1: Exactly 1 piece moved to an illegal square
+        if len(missing) == 1 and len(extra) == 1:
+            from_sq_name = missing[0]
+            to_sq_name = extra[0]
+            try:
+                from_sq = chess.parse_square(from_sq_name)
+                to_sq = chess.parse_square(to_sq_name)
+                piece = self.board.piece_at(from_sq)
+
+                if piece is None:
+                    return f"Square {from_sq_name.upper()} was empty; cannot move an absent piece."
+
+                piece_name = chess.piece_name(piece.piece_type).capitalize()
+                piece_color = "White" if piece.color == chess.WHITE else "Black"
+
+                if piece.color != self.board.turn:
+                    return f"Turn violation: It is {turn_name}'s turn, but {piece_color} {piece_name} on {from_sq_name.upper()} was moved."
+
+                target_piece = self.board.piece_at(to_sq)
+                if target_piece and target_piece.color == piece.color:
+                    return f"Cannot move {piece_name} to {to_sq_name.upper()}: square is already occupied by your own {chess.piece_name(target_piece.piece_type)}."
+
+                # Check if king is in check
+                if self.board.is_check():
+                    return f"Illegal move: Your King is in CHECK! You must protect your King, block the attack, or capture the checking piece."
+
+                # Check if piece is pinned to the King
+                king_sq = self.board.king(piece.color)
+                if king_sq is not None and self.board.is_pinned(piece.color, from_sq):
+                    return f"Illegal move: {piece_name} on {from_sq_name.upper()} is pinned to your King. Moving it exposes your King to check."
+
+                # Piece specific movement rules
+                if piece.piece_type == chess.PAWN:
+                    from_file, from_rank = chess.square_file(from_sq), chess.square_rank(from_sq)
+                    to_file, to_rank = chess.square_file(to_sq), chess.square_rank(to_sq)
+                    forward = 1 if piece.color == chess.WHITE else -1
+                    if (to_rank - from_rank) * forward < 0:
+                        return f"Pawns cannot move backwards ({from_sq_name.upper()} -> {to_sq_name.upper()})."
+                    if from_file == to_file and target_piece is not None:
+                        return f"Pawn on {from_sq_name.upper()} cannot advance forward because {to_sq_name.upper()} is blocked."
+                    if from_file != to_file and target_piece is None:
+                        return f"Pawns only move diagonally when capturing an opponent piece ({from_sq_name.upper()} -> {to_sq_name.upper()})."
+                    return f"Pawn cannot make that move from {from_sq_name.upper()} to {to_sq_name.upper()}."
+
+                elif piece.piece_type == chess.KNIGHT:
+                    return f"Knights only move in an L-shape (2 squares in one direction, 1 square perpendicular). {to_sq_name.upper()} is not a legal knight jump from {from_sq_name.upper()}."
+
+                elif piece.piece_type == chess.BISHOP:
+                    from_file, from_rank = chess.square_file(from_sq), chess.square_rank(from_sq)
+                    to_file, to_rank = chess.square_file(to_sq), chess.square_rank(to_sq)
+                    if abs(to_file - from_file) != abs(to_rank - from_rank):
+                        return f"Bishops can only move diagonally. {to_sq_name.upper()} is not diagonal from {from_sq_name.upper()}."
+                    return f"Bishop on {from_sq_name.upper()} cannot reach {to_sq_name.upper()} because its diagonal path is blocked."
+
+                elif piece.piece_type == chess.ROOK:
+                    from_file, from_rank = chess.square_file(from_sq), chess.square_rank(from_sq)
+                    to_file, to_rank = chess.square_file(to_sq), chess.square_rank(to_sq)
+                    if from_file != to_file and from_rank != to_rank:
+                        return f"Rooks can only move horizontally or vertically ({from_sq_name.upper()} -> {to_sq_name.upper()})."
+                    return f"Rook on {from_sq_name.upper()} cannot reach {to_sq_name.upper()} because its path is blocked."
+
+                elif piece.piece_type == chess.QUEEN:
+                    return f"Queen on {from_sq_name.upper()} cannot move to {to_sq_name.upper()}: path is either not on a rank, file, or diagonal, or is blocked."
+
+                elif piece.piece_type == chess.KING:
+                    return f"King cannot move to {to_sq_name.upper()}: kings can only move 1 square (or castle), and cannot step into check."
+
+                return f"Illegal move for {piece_name} from {from_sq_name.upper()} to {to_sq_name.upper()}."
+            except Exception:
+                pass
+
+        # Case 2: Only 1 piece missing (e.g. piece lifted and held in hand or knocked off)
+        if len(missing) == 1 and len(extra) == 0:
+            sq_name = missing[0].upper()
+            return f"Piece lifted or missing from {sq_name}. Place piece back on {sq_name} (Blue LED) or complete your move."
+
+        # Case 3: Multiple pieces missing
+        if len(missing) > 1 and len(extra) == 0:
+            return f"{len(missing)} pieces missing ({', '.join(s.upper() for s in missing)}). Return pieces to their squares (Blue LEDs)."
+
+        # Case 4: Extra pieces on board
+        if len(extra) > 0 and len(missing) == 0:
+            return f"Unexpected extra piece(s) placed on {', '.join(s.upper() for s in extra)} (Red LEDs). Please remove."
+
+        return f"Board mismatch: {len(missing)} missing ({', '.join(s.upper() for s in missing)}), {len(extra)} extra ({', '.join(s.upper() for s in extra)}). Restore board to match LEDs."
 
     # -------------------------------------------------------------
     # 5. RECOVERY Handler
@@ -819,8 +937,13 @@ class GameSession:
                 "step": step["step"],
                 "total_steps": step["total_steps"],
                 "instruction": step["instruction"],
+                "from_square": step.get("from_square"),
+                "to_square": step.get("to_square"),
+                "in_hand": step.get("in_hand", False),
                 "expected_occupancy_hex": hex(step["expected_occupancy"]).upper(),
                 "leds": step.get("leds", {}),
+                "pickup_leds": step.get("pickup_leds", {}),
+                "place_leds": step.get("place_leds", {}),
                 "oled": step.get("oled", "")
             }
         return None
